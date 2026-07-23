@@ -128,7 +128,7 @@ pip install -r requirements.txt
 Run the backend:
 
 ```bash
-python app.py
+python main.py
 ```
 
 Backend will start at:
