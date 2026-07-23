@@ -1,0 +1,22 @@
+# Node
+node_modules/
+frontend/node_modules/
+
+# pnpm
+.pnpm-store/
+.local/
+
+# Build
+dist/
+build/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment
+.env
+
+backend/alzheimers_model.h5

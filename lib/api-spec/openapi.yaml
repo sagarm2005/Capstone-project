@@ -1,0 +1,1293 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: MediCore HMS API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: auth
+  - name: patients
+  - name: doctors
+  - name: appointments
+  - name: prescriptions
+  - name: lab
+  - name: payments
+  - name: notifications
+  - name: admin
+  - name: chatbot
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupBody"
+      responses:
+        "201":
+          description: Signup successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /patients:
+    get:
+      operationId: listPatients
+      tags: [patients]
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of patients
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientList"
+
+  /patients/{id}:
+    get:
+      operationId: getPatient
+      tags: [patients]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Patient details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+
+  /patients/{id}/history:
+    get:
+      operationId: getPatientHistory
+      tags: [patients]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Patient visit history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientHistory"
+
+  /patients/{id}/followups:
+    get:
+      operationId: getPatientFollowups
+      tags: [patients]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Patient follow-ups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Followup"
+
+  /doctors:
+    get:
+      operationId: listDoctors
+      tags: [doctors]
+      parameters:
+        - in: query
+          name: specialty
+          schema:
+            type: string
+        - in: query
+          name: location
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of doctors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Doctor"
+
+  /doctors/{id}:
+    get:
+      operationId: getDoctor
+      tags: [doctors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Doctor details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Doctor"
+
+  /doctors/{id}/slots:
+    get:
+      operationId: getDoctorSlots
+      tags: [doctors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Available time slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeSlot"
+
+  /appointments:
+    get:
+      operationId: listAppointments
+      tags: [appointments]
+      parameters:
+        - in: query
+          name: patientId
+          schema:
+            type: integer
+        - in: query
+          name: doctorId
+          schema:
+            type: integer
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, confirmed, completed, cancelled]
+      responses:
+        "200":
+          description: List of appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Appointment"
+    post:
+      operationId: createAppointment
+      tags: [appointments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentBody"
+      responses:
+        "201":
+          description: Appointment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+
+  /appointments/{id}:
+    get:
+      operationId: getAppointment
+      tags: [appointments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Appointment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+    patch:
+      operationId: updateAppointment
+      tags: [appointments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentBody"
+      responses:
+        "200":
+          description: Updated appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+
+  /prescriptions:
+    get:
+      operationId: listPrescriptions
+      tags: [prescriptions]
+      parameters:
+        - in: query
+          name: patientId
+          schema:
+            type: integer
+        - in: query
+          name: doctorId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of prescriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Prescription"
+    post:
+      operationId: createPrescription
+      tags: [prescriptions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePrescriptionBody"
+      responses:
+        "201":
+          description: Prescription created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Prescription"
+
+  /prescriptions/{id}:
+    get:
+      operationId: getPrescription
+      tags: [prescriptions]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Prescription details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Prescription"
+
+  /lab/requests:
+    get:
+      operationId: listLabRequests
+      tags: [lab]
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, processing, ready, reviewed]
+      responses:
+        "200":
+          description: Lab requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LabRequest"
+    post:
+      operationId: createLabRequest
+      tags: [lab]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLabRequestBody"
+      responses:
+        "201":
+          description: Lab request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabRequest"
+
+  /lab/requests/{id}/report:
+    post:
+      operationId: uploadLabReport
+      tags: [lab]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadReportBody"
+      responses:
+        "200":
+          description: Report uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabRequest"
+
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      parameters:
+        - in: query
+          name: patientId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payments list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+    post:
+      operationId: createPayment
+      tags: [payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentBody"
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      parameters:
+        - in: query
+          name: userId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      responses:
+        "200":
+          description: System stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/locations:
+    get:
+      operationId: getLocationStats
+      tags: [admin]
+      responses:
+        "200":
+          description: Doctors and patients by location
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationStat"
+
+  /admin/disease-data:
+    get:
+      operationId: getDiseaseData
+      tags: [admin]
+      parameters:
+        - in: query
+          name: location
+          schema:
+            type: string
+        - in: query
+          name: disease
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Disease outbreak data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiseaseData"
+
+  /admin/spread-prediction:
+    get:
+      operationId: getSpreadPrediction
+      tags: [admin]
+      parameters:
+        - in: query
+          name: disease
+          schema:
+            type: string
+        - in: query
+          name: location
+          schema:
+            type: string
+      responses:
+        "200":
+          description: AI spread prediction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpreadPrediction"
+
+  /chatbot/query:
+    post:
+      operationId: chatbotQuery
+      tags: [chatbot]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatbotQueryBody"
+      responses:
+        "200":
+          description: Chatbot response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatbotResponse"
+
+  /dashboard/patient-summary:
+    get:
+      operationId: getPatientDashboardSummary
+      tags: [patients]
+      parameters:
+        - in: query
+          name: patientId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Patient dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientDashboardSummary"
+
+  /dashboard/doctor-summary:
+    get:
+      operationId: getDoctorDashboardSummary
+      tags: [doctors]
+      parameters:
+        - in: query
+          name: doctorId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Doctor dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DoctorDashboardSummary"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [patient, doctor, lab, admin, superadmin]
+      required: [email, password, role]
+
+    SignupBody:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        phone:
+          type: string
+        dateOfBirth:
+          type: string
+        gender:
+          type: string
+        bloodGroup:
+          type: string
+        allergies:
+          type: array
+          items:
+            type: string
+        existingConditions:
+          type: array
+          items:
+            type: string
+      required: [fullName, email, password, phone, dateOfBirth, gender]
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+      required: [token, user]
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        avatar:
+          type: string
+      required: [id, fullName, email, role]
+
+    Patient:
+      type: object
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        dateOfBirth:
+          type: string
+        gender:
+          type: string
+        bloodGroup:
+          type: string
+        allergies:
+          type: array
+          items:
+            type: string
+        existingConditions:
+          type: array
+          items:
+            type: string
+        lastVisit:
+          type: string
+        vaccinationStatus:
+          type: string
+      required: [id, fullName, email, phone, dateOfBirth, gender]
+
+    PatientList:
+      type: object
+      properties:
+        patients:
+          type: array
+          items:
+            $ref: "#/components/schemas/Patient"
+        total:
+          type: integer
+      required: [patients, total]
+
+    PatientHistory:
+      type: object
+      properties:
+        visits:
+          type: array
+          items:
+            $ref: "#/components/schemas/Visit"
+      required: [visits]
+
+    Visit:
+      type: object
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        doctorName:
+          type: string
+        diagnosis:
+          type: string
+        notes:
+          type: string
+      required: [id, date, doctorName, diagnosis]
+
+    Followup:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        doctorId:
+          type: integer
+        doctorName:
+          type: string
+        dueDate:
+          type: string
+        status:
+          type: string
+          enum: [pending, completed, missed]
+        reason:
+          type: string
+      required: [id, patientId, doctorId, doctorName, dueDate, status]
+
+    Doctor:
+      type: object
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        specialty:
+          type: string
+        hospital:
+          type: string
+        location:
+          type: string
+        activePatients:
+          type: integer
+        status:
+          type: string
+          enum: [active, on_leave]
+        rating:
+          type: number
+        experience:
+          type: integer
+        fee:
+          type: number
+      required: [id, fullName, specialty, hospital, location, status]
+
+    TimeSlot:
+      type: object
+      properties:
+        time:
+          type: string
+        available:
+          type: boolean
+      required: [time, available]
+
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        patientName:
+          type: string
+        doctorId:
+          type: integer
+        doctorName:
+          type: string
+        date:
+          type: string
+        time:
+          type: string
+        type:
+          type: string
+          enum: [normal, emergency, followup]
+        status:
+          type: string
+          enum: [pending, confirmed, completed, cancelled]
+        fee:
+          type: number
+        notes:
+          type: string
+      required: [id, patientId, patientName, doctorId, doctorName, date, time, type, status]
+
+    CreateAppointmentBody:
+      type: object
+      properties:
+        patientId:
+          type: integer
+        doctorId:
+          type: integer
+        date:
+          type: string
+        time:
+          type: string
+        type:
+          type: string
+          enum: [normal, emergency, followup]
+        notes:
+          type: string
+      required: [patientId, doctorId, date, time, type]
+
+    UpdateAppointmentBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, completed, cancelled]
+        date:
+          type: string
+        time:
+          type: string
+        notes:
+          type: string
+
+    Prescription:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        patientName:
+          type: string
+        doctorId:
+          type: integer
+        doctorName:
+          type: string
+        doctorLicense:
+          type: string
+        hospital:
+          type: string
+        diagnosis:
+          type: string
+        medicines:
+          type: array
+          items:
+            $ref: "#/components/schemas/Medicine"
+        labTests:
+          type: array
+          items:
+            type: string
+        followupDate:
+          type: string
+        validations:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrescriptionValidation"
+        createdAt:
+          type: string
+      required: [id, patientId, patientName, doctorId, doctorName, diagnosis, medicines, createdAt]
+
+    Medicine:
+      type: object
+      properties:
+        name:
+          type: string
+        dosage:
+          type: string
+        frequency:
+          type: string
+        duration:
+          type: string
+        route:
+          type: string
+      required: [name, dosage, frequency, duration]
+
+    PrescriptionValidation:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [success, warning, error]
+        message:
+          type: string
+      required: [type, message]
+
+    CreatePrescriptionBody:
+      type: object
+      properties:
+        patientId:
+          type: integer
+        doctorId:
+          type: integer
+        diagnosis:
+          type: string
+        medicines:
+          type: array
+          items:
+            $ref: "#/components/schemas/Medicine"
+        labTests:
+          type: array
+          items:
+            type: string
+        followupDate:
+          type: string
+      required: [patientId, doctorId, diagnosis, medicines]
+
+    LabRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        patientName:
+          type: string
+        doctorId:
+          type: integer
+        doctorName:
+          type: string
+        testType:
+          type: string
+        priority:
+          type: string
+          enum: [urgent, normal]
+        status:
+          type: string
+          enum: [pending, processing, ready, reviewed]
+        reportUrl:
+          type: string
+        aiAnalysis:
+          $ref: "#/components/schemas/AIAnalysis"
+        createdAt:
+          type: string
+      required: [id, patientId, patientName, doctorId, doctorName, testType, priority, status, createdAt]
+
+    AIAnalysis:
+      type: object
+      properties:
+        primaryCondition:
+          type: string
+        confidence:
+          type: number
+        secondaryConditions:
+          type: array
+          items:
+            type: object
+            properties:
+              condition:
+                type: string
+              confidence:
+                type: number
+            required: [condition, confidence]
+        disclaimer:
+          type: string
+      required: [primaryCondition, confidence, disclaimer]
+
+    CreateLabRequestBody:
+      type: object
+      properties:
+        patientId:
+          type: integer
+        doctorId:
+          type: integer
+        testType:
+          type: string
+        priority:
+          type: string
+          enum: [urgent, normal]
+      required: [patientId, doctorId, testType, priority]
+
+    UploadReportBody:
+      type: object
+      properties:
+        reportUrl:
+          type: string
+        notes:
+          type: string
+      required: [reportUrl]
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        patientName:
+          type: string
+        appointmentId:
+          type: integer
+        amount:
+          type: number
+        category:
+          type: string
+          enum: [consultation, emergency, lab]
+        method:
+          type: string
+          enum: [upi, card, cash]
+        status:
+          type: string
+          enum: [pending, completed, failed, refunded]
+        invoiceId:
+          type: string
+        createdAt:
+          type: string
+      required: [id, patientId, patientName, amount, category, method, status, createdAt]
+
+    CreatePaymentBody:
+      type: object
+      properties:
+        patientId:
+          type: integer
+        appointmentId:
+          type: integer
+        amount:
+          type: number
+        category:
+          type: string
+          enum: [consultation, emergency, lab]
+        method:
+          type: string
+          enum: [upi, card, cash]
+      required: [patientId, amount, category, method]
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        type:
+          type: string
+          enum: [appointment, payment, lab_report, followup, alert]
+        title:
+          type: string
+        message:
+          type: string
+        read:
+          type: boolean
+        createdAt:
+          type: string
+      required: [id, userId, type, title, message, read, createdAt]
+
+    AdminStats:
+      type: object
+      properties:
+        totalDoctors:
+          type: integer
+        activeDoctors:
+          type: integer
+        totalPatients:
+          type: integer
+        totalFacilities:
+          type: integer
+        criticalAlerts:
+          type: integer
+        appointmentsToday:
+          type: integer
+        prescriptionsToday:
+          type: integer
+        pendingLabReports:
+          type: integer
+      required: [totalDoctors, activeDoctors, totalPatients, totalFacilities, criticalAlerts]
+
+    LocationStat:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        totalDoctors:
+          type: integer
+        activeDoctors:
+          type: integer
+        onLeave:
+          type: integer
+        activePatients:
+          type: integer
+        facilities:
+          type: integer
+        breakdown:
+          type: object
+          properties:
+            gp:
+              type: integer
+            specialists:
+              type: integer
+            surgeons:
+              type: integer
+          required: [gp, specialists, surgeons]
+      required: [id, name, totalDoctors, activeDoctors, onLeave, activePatients, facilities, breakdown]
+
+    DiseaseData:
+      type: object
+      properties:
+        location:
+          type: string
+        disease:
+          type: string
+        activeCases:
+          type: integer
+        severity:
+          type: string
+          enum: [critical, moderate, low]
+        weeklyTrend:
+          type: number
+        breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              disease:
+                type: string
+              count:
+                type: integer
+            required: [disease, count]
+      required: [location, disease, activeCases, severity, weeklyTrend, breakdown]
+
+    SpreadPrediction:
+      type: object
+      properties:
+        disease:
+          type: string
+        location:
+          type: string
+        confidence:
+          type: number
+        historicalData:
+          type: array
+          items:
+            type: object
+            properties:
+              day:
+                type: string
+              cases:
+                type: integer
+            required: [day, cases]
+        predictedData:
+          type: array
+          items:
+            type: object
+            properties:
+              day:
+                type: string
+              cases:
+                type: integer
+            required: [day, cases]
+        riskAlert:
+          type: string
+      required: [disease, location, confidence, historicalData, predictedData]
+
+    ChatbotQueryBody:
+      type: object
+      properties:
+        message:
+          type: string
+        patientId:
+          type: integer
+        sessionId:
+          type: string
+      required: [message]
+
+    ChatbotResponse:
+      type: object
+      properties:
+        reply:
+          type: string
+        intent:
+          type: string
+        suggestions:
+          type: array
+          items:
+            type: string
+        action:
+          type: object
+          properties:
+            type:
+              type: string
+            data:
+              type: object
+      required: [reply, intent]
+
+    PatientDashboardSummary:
+      type: object
+      properties:
+        patientId:
+          type: integer
+        upcomingAppointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+        pendingFollowups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Followup"
+        recentPrescriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Prescription"
+        unreadNotifications:
+          type: integer
+        vaccinationStatus:
+          type: string
+      required: [patientId, upcomingAppointments, pendingFollowups, recentPrescriptions, unreadNotifications]
+
+    DoctorDashboardSummary:
+      type: object
+      properties:
+        doctorId:
+          type: integer
+        todayAppointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+        pendingRequests:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+        pendingLabReports:
+          type: integer
+        prescriptionsToday:
+          type: integer
+        followupQueue:
+          type: array
+          items:
+            $ref: "#/components/schemas/Followup"
+      required: [doctorId, todayAppointments, pendingRequests, pendingLabReports, prescriptionsToday, followupQueue]

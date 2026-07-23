@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "MediCore HMS"
+version = "1.0.0"
+id = "artifacts/healthcare-app"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25821
+
+[services.development]
+run = "npm run dev --prefix /home/runner/workspace/frontend"
+
+[services.production]
+build = [ "npm", "run", "build", "--prefix", "/home/runner/workspace/frontend" ]
+publicDir = "frontend/dist"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25821"
+BASE_PATH = "/"

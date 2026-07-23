@@ -1,0 +1,83 @@
+Act as a senior software architect and AI engineer.
+
+Design and generate a complete full-stack system for an "AI-Powered Doctor Assistance and Smart Healthcare Management System".
+
+The system should include the following modules:
+
+1. Patient Management:
+- Store patient details, medical history (BP, diabetes, etc.), allergies, and vaccination records
+- Maintain past prescriptions and visit history
+
+2. Appointment System:
+- Time-slot based booking for multiple doctors
+- Appointment types: Normal, Emergency, and Follow-up
+- Doctor can accept, reject, or reschedule appointments
+- Track status: Pending, Confirmed, Completed, Cancelled
+
+3. Follow-Up Reminder System:
+- Doctor can assign a follow-up date during prescription
+- Store follow-up details in the database
+- When patient logs in:
+  - Automatically check for pending follow-ups
+  - Display notification if follow-up exists
+- Show upcoming follow-ups on dashboard
+- Allow one-click booking for follow-up appointments
+- Track follow-up status: Pending, Completed, Missed
+- (Optional advanced) Send reminder before 1 day
+
+4. Payment System:
+- Simulated online payment (UPI/card)
+- Separate billing for consultation, emergency, and lab tests
+- Generate invoice and payment status tracking
+
+5. Smart Prescription Generator:
+- Generate realistic prescriptions with hospital name, doctor details, patient details, diagnosis, and medicines
+- Include dosage, frequency, and duration
+- Implement validation to detect:
+  - Wrong medicine for a disease
+  - Allergy conflicts
+  - Drug interactions
+
+6. Lab Integration:
+- Doctor can prescribe tests (X-ray, CT scan, etc.)
+- Lab receives requests and uploads reports
+- Notify doctor when reports are ready
+
+7. AI Report Analysis:
+- Integrate pretrained ML models to analyze medical reports/images
+- Provide predicted disease and confidence score
+- Include disclaimer that AI is assistive
+
+8. Chatbot System:
+- Allow patients to:
+  - Check doctor availability
+  - Book appointments
+  - Check vaccination status
+  - Ask basic queries
+- Use NLP-based intent detection
+
+9. Notification System:
+- Send notifications for:
+  - Appointment confirmation
+  - Payments
+  - Lab reports
+  - Follow-up reminders
+
+10. Role-Based Access:
+- Separate dashboards for Patient, Doctor, Lab, and Admin
+
+Technical Requirements:
+- Backend: Python (Flask/Django) or Node.js
+- Frontend: Web or Android app
+- Database: MySQL or MongoDB
+- Include database schema (ER diagram)
+- Include API design
+- Include system architecture diagram
+
+Also include:
+- Sample UI design ideas
+- Sample prescription format
+- Example chatbot interactions
+- Basic ML model suggestions for report analysis
+
+Ensure the system is scalable, user-friendly, and suitable for a final-year engineering project.
