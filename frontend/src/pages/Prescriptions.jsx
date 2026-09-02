@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "wouter";
+import { jsPDF } from "jspdf";
 import { api } from "@/lib/api";
 import { FileText, Plus, X, CheckCircle, AlertTriangle, XCircle, Printer, Download, Mail, Phone, MapPin } from "lucide-react";
 
@@ -11,6 +13,7 @@ function ValidationIcon({ type }) {
 
 export default function Prescriptions() {
   const { user } = useAuth();
+  const [location] = useLocation();
   const [prescriptions, setPrescriptions] = useState([]);
   const [patients, setPatients] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -31,6 +34,7 @@ export default function Prescriptions() {
     doctorRegistrationNumber: "",
   });
   const [loading, setLoading] = useState(false);
+  const [attachedReport, setAttachedReport] = useState(null);
 
   const getAgeFromDob = (dob) => {
     if (!dob) return "";
@@ -82,16 +86,73 @@ export default function Prescriptions() {
     }
   }, []);
 
+  useEffect(() => {
+    if (user?.role !== "doctor" || !location.startsWith("/prescriptions")) return;
+    const pending = sessionStorage.getItem("pending_model_report");
+    if (!pending) return;
+    try {
+      setAttachedReport(JSON.parse(pending));
+      setShowCreate(true);
+      sessionStorage.removeItem("pending_model_report");
+    } catch {
+      sessionStorage.removeItem("pending_model_report");
+    }
+  }, [location, user]);
+
+  const buildPrescriptionPdf = (prescription, report) => {
+    const pdf = new jsPDF();
+    pdf.setFontSize(18);
+    pdf.text("MediCore Prescription and Model Report", 20, 20);
+    pdf.setFontSize(11);
+    pdf.text(`Prescription ID: ${prescription.id}`, 20, 30);
+    pdf.text(`Patient: ${prescription.patientName}`, 20, 38);
+    pdf.text(`Doctor: ${prescription.doctorName}`, 20, 46);
+    pdf.text(`Diagnosis: ${prescription.diagnosis}`, 20, 54);
+    pdf.text("Medicines:", 20, 68);
+    prescription.medicines.forEach((medicine, index) => {
+      pdf.text(`${index + 1}. ${medicine.name} - ${medicine.dosage}, ${medicine.frequency}, ${medicine.duration}`, 25, 76 + index * 8);
+    });
+    let nextY = 84 + prescription.medicines.length * 8;
+    if (prescription.labTests?.length) {
+      pdf.text(`Lab tests: ${prescription.labTests.join(", ")}`, 20, nextY);
+      nextY += 10;
+    }
+    if (report?.dataUrl) {
+      pdf.addPage();
+      pdf.setFontSize(16);
+      pdf.text("Attached Pneumonia Model Report", 20, 20);
+      pdf.setFontSize(11);
+      pdf.text(`Prediction: ${report.result.prediction}`, 20, 30);
+      pdf.text(`Confidence: ${Math.round(report.result.confidence * 100)}%`, 20, 38);
+      const imageFormat = report.dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+      pdf.addImage(report.dataUrl, imageFormat, 20, 50, 170, 120, undefined, "MEDIUM");
+      pdf.setFontSize(9);
+      pdf.text(report.result.disclaimer, 20, 180, { maxWidth: 170 });
+    }
+    return pdf;
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post("/prescriptions", {
+      const prescription = await api.post("/prescriptions", {
         patientId: form.patientId, doctorId: user?.id, diagnosis: form.diagnosis,
         medicines: form.medicines.filter((m) => m.name),
         labTests: form.labTests.split(",").map((t) => t.trim()).filter(Boolean),
         followupDate: form.followupDate || null,
       });
+      if (attachedReport) {
+        const pdf = buildPrescriptionPdf(prescription, attachedReport);
+        const pdfBlob = pdf.output("blob");
+        const formData = new FormData();
+        formData.append("file", pdfBlob, `prescription-${prescription.id}.pdf`);
+        formData.append("assetType", "prescription");
+        formData.append("prescriptionId", String(prescription.id));
+        const uploaded = await api.upload("/uploads", formData);
+        await api.patch(`/prescriptions/${prescription.id}`, { prescriptionPdfUrl: uploaded.url, prescriptionPdfUploadId: uploaded.id });
+        setAttachedReport(null);
+      }
       fetchRx();
       setShowCreate(false);
     } catch (err) { console.error(err); }
@@ -339,6 +400,15 @@ export default function Prescriptions() {
               <button onClick={() => setShowCreate(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-4">
+              {attachedReport && (
+                <div className="flex items-center gap-3 rounded-lg border border-teal-100 bg-teal-50 p-3">
+                  <FileText size={18} className="text-teal-700 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-teal-900">Model report attached</p>
+                    <p className="text-xs text-teal-700 truncate">{attachedReport.fileName} · {attachedReport.result.prediction} ({Math.round(attachedReport.result.confidence * 100)}%)</p>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Patient</label>
                 <select value={form.patientId} onChange={(e) => setForm({ ...form, patientId: Number(e.target.value) })} required

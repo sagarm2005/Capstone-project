@@ -15,6 +15,9 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+medical-ai/venv/
+medical-ai/__pycache__/
+medical-ai/models/**/.cache/
 
 # Environment
 .env

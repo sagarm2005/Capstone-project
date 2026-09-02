@@ -24,6 +24,7 @@ function StatCard({ icon, label, value, color, trend }) {
 function PatientDashboard({ data }) {
   const { user } = useAuth();
   const [labReports, setLabReports] = useState([]);
+  const [prescriptions, setPrescriptions] = useState([]);
   const [followups, setFollowups] = useState([]);
   const [showFollowupModal, setShowFollowupModal] = useState(false);
   const [urgentFollowup, setUrgentFollowup] = useState(null);
@@ -46,6 +47,7 @@ function PatientDashboard({ data }) {
   useEffect(() => {
     if (user?.id) {
       api.get(`/lab/requests?patientId=${user.id}`).then(setLabReports).catch(console.error);
+      api.get(`/prescriptions?patientId=${user.id}`).then(setPrescriptions).catch(console.error);
       // Fetch follow-ups
       api.get(`/followups?patientId=${user.id}`).then((followups) => {
         setFollowups(followups);
@@ -210,6 +212,20 @@ function PatientDashboard({ data }) {
           </button>
         </div>
       </div>
+
+      {prescriptions.some((prescription) => prescription.prescriptionPdfUrl) && (
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><FileText size={16} className="text-[#0d6e7e]" /> Prescription Documents</h3>
+          <div className="space-y-3">
+            {prescriptions.filter((prescription) => prescription.prescriptionPdfUrl).map((prescription) => (
+              <div key={prescription.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 p-3">
+                <div><p className="text-sm font-medium text-gray-800">Prescription #{prescription.id}</p><p className="text-xs text-gray-500">{prescription.diagnosis}</p></div>
+                <a href={prescription.prescriptionPdfUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[#0d6e7e] hover:underline">Open combined PDF</a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -383,6 +399,81 @@ function PatientDashboard({ data }) {
   );
 }
 
+function DoctorModels() {
+  const models = [
+    { id: "pneumonia", label: "Pneumonia", description: "Screen a chest X-ray for pneumonia indicators.", active: true },
+    { id: "alzheimer", label: "Alzheimer's", description: "Model integration coming soon.", active: false },
+    { id: "diabetic-retinopathy", label: "Diabetic Retinopathy", description: "Model integration coming soon.", active: false },
+    { id: "skin-lesion", label: "Skin Lesion", description: "Model integration coming soon.", active: false },
+    { id: "brain-tumor", label: "Brain Tumor", description: "Model integration coming soon.", active: false },
+    { id: "tb", label: "Tuberculosis", description: "Model integration coming soon.", active: false },
+  ];
+  const [activeModel, setActiveModel] = useState("pneumonia");
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleFile = (event) => {
+    const selectedFile = event.target.files?.[0];
+    if (!selectedFile) return;
+    setFile(selectedFile);
+    setPreview(URL.createObjectURL(selectedFile));
+    setResult(null);
+    setError("");
+  };
+
+  const predict = async () => {
+    if (!file || activeModel !== "pneumonia") return;
+    setLoading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      setResult(await api.upload("/models/pneumonia/predict", formData));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+      <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <Brain size={16} className="text-[#0d6e7e]" /> Models
+      </h3>
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-5">
+        {models.map((model) => (
+          <button key={model.id} disabled={!model.active} onClick={() => { setActiveModel(model.id); setResult(null); setError(""); }}
+            className={`shrink-0 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${activeModel === model.id ? "bg-[#0d6e7e] text-white border-[#0d6e7e]" : model.active ? "bg-white text-gray-700 border-gray-200 hover:border-teal-400" : "bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed"}`}>
+            {model.label}{!model.active && " · Soon"}
+          </button>
+        ))}
+      </div>
+      <div className="grid gap-5 md:grid-cols-[1fr_0.8fr]">
+        <div>
+          <p className="text-sm font-medium text-gray-800">Pneumonia Detection</p>
+          <p className="text-xs text-gray-500 mt-1 mb-4">Upload a chest X-ray image for AI screening.</p>
+          <label className="block rounded-xl border border-dashed border-gray-200 p-6 text-center cursor-pointer hover:border-teal-400 bg-gray-50">
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFile} className="hidden" />
+            {preview ? <img src={preview} alt="Selected chest X-ray" className="mx-auto max-h-48 rounded-lg object-contain" /> : <><FileText size={28} className="mx-auto text-gray-300" /><p className="text-sm font-semibold text-gray-700 mt-2">Choose X-ray image</p><p className="text-xs text-gray-500 mt-1">PNG, JPG, JPEG, or WEBP</p></>}
+          </label>
+          <button onClick={predict} disabled={!file || loading} className="mt-4 w-full py-2.5 rounded-lg bg-[#0d6e7e] text-white text-sm font-semibold hover:bg-[#0a5566] disabled:opacity-50">
+            {loading ? "Analyzing..." : "Run Prediction"}
+          </button>
+          {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+        </div>
+        <div className="rounded-xl bg-gray-50 border border-gray-100 p-5 min-h-48">
+          <p className="text-[10px] uppercase tracking-[0.25em] text-gray-500 mb-4">Prediction Output</p>
+          {result ? <><p className={`text-2xl font-bold ${result.prediction === "Pneumonia" ? "text-red-600" : "text-green-600"}`}>{result.prediction}</p><p className="text-sm text-gray-600 mt-2">Confidence: {Math.round(result.confidence * 100)}%</p><p className="text-xs text-amber-700 mt-5">{result.disclaimer}</p></> : <p className="text-sm text-gray-400 italic">Upload an image to see the model output.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DoctorDashboard({ data }) {
   const { user } = useAuth();
   const [selectedReport, setSelectedReport] = useState(null);
@@ -448,6 +539,8 @@ function DoctorDashboard({ data }) {
           )}
         </div>
       </div>
+
+      <DoctorModels />
 
       {selectedReport && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">

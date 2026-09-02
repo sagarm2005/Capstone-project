@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Calendar, FileText, FlaskConical, CreditCard,
-  Bell, MessageCircle, Users, Activity, Map, LogOut, Menu, User, ChevronRight, Syringe
+  Bell, MessageCircle, Users, Activity, Map, LogOut, Menu, User, ChevronRight, Syringe, Brain
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { icon: <Activity size={18} />, label: "Blood Bank", href: "/blood-bank", roles: ["doctor", "blood_bank", "admin"] },
   { icon: <FileText size={18} />, label: "Prescriptions", href: "/prescriptions", roles: ["patient", "doctor"] },
   { icon: <FlaskConical size={18} />, label: "Lab Reports", href: "/lab", roles: ["patient", "doctor", "lab"] },
+  { icon: <Brain size={18} />, label: "Models", href: "/models", roles: ["doctor"] },
   { icon: <Syringe size={18} />, label: "Vaccinations", href: "/vaccinations", roles: ["patient", "doctor", "admin"] },
   { icon: <CreditCard size={18} />, label: "Payments", href: "/payments", roles: ["patient", "admin"] },
   { icon: <Bell size={18} />, label: "Notifications", href: "/notifications", roles: ["patient", "doctor", "lab", "admin", "superadmin", "blood_bank"] },

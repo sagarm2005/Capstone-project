@@ -9,6 +9,7 @@ import Dashboard from "@/pages/Dashboard";
 import Appointments from "@/pages/Appointments";
 import Prescriptions from "@/pages/Prescriptions";
 import Lab from "@/pages/Lab";
+import Models from "@/pages/Models";
 import Payments from "@/pages/Payments";
 import Notifications from "@/pages/Notifications";
 import Chatbot from "@/pages/Chatbot";
@@ -72,6 +73,7 @@ function Router() {
       <Route path="/schedule" component={() => <ProtectedRoute component={ManageSchedule} roles={["doctor"]} />} />
       <Route path="/prescriptions" component={() => <ProtectedRoute component={Prescriptions} roles={["patient", "doctor", "admin"]} />} />
       <Route path="/lab" component={() => <ProtectedRoute component={Lab} roles={["patient", "doctor", "lab", "admin"]} />} />
+      <Route path="/models" component={() => <ProtectedRoute component={Models} roles={["doctor"]} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={Payments} roles={["patient", "admin", "superadmin"]} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />

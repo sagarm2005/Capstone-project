@@ -8,11 +8,14 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, create_access_token
 from db import get_db, serialize, serialize_list
 from openai import OpenAI
+from dotenv import load_dotenv
+import requests
 import cloudinary
 import cloudinary.uploader
 import cloudinary.utils
 
 logging.basicConfig(level=logging.INFO)
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -34,6 +37,7 @@ UPLOAD_TYPES = {
     "prescription": {"roles": {"doctor", "admin", "superadmin"}, "extensions": {"pdf", "png", "jpg", "jpeg", "webp"}},
     "hospital_image": {"roles": {"doctor", "admin", "superadmin"}, "extensions": {"png", "jpg", "jpeg", "webp"}},
 }
+MODEL_SERVICE_URL = os.getenv("MODEL_SERVICE_URL", "http://127.0.0.1:8000")
 
 # Initialize OpenAI Client
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -125,6 +129,9 @@ def upload_file():
         return jsonify({"error": "A file is required"}), 400
     if not policy or user["role"] not in policy["roles"]:
         return jsonify({"error": "Your role cannot upload this asset type"}), 403
+    if not all((os.getenv("CLOUDINARY_CLOUD_NAME"), os.getenv("CLOUDINARY_API_KEY"), os.getenv("CLOUDINARY_API_SECRET"))):
+        logging.error("Cloudinary credentials are not configured")
+        return jsonify({"error": "File upload is not configured on the server"}), 503
     if request.content_length and request.content_length > MAX_UPLOAD_BYTES:
         return jsonify({"error": "File must be 15 MB or smaller"}), 413
 
@@ -155,7 +162,7 @@ def upload_file():
     resource_type = "image" if extension != "pdf" else "raw"
     try:
         result = cloudinary.uploader.upload(
-            file.stream,
+            file,
             resource_type=resource_type,
             type="authenticated",
             folder=f"medicore/{asset_type}/{user['id']}",
@@ -213,6 +220,37 @@ def delete_file(upload_id):
     if upload_record.get("labRequestId"):
         db.lab_requests.update_one({"id": upload_record["labRequestId"], "uploadId": upload_id}, {"$unset": {"reportUrl": "", "uploadId": ""}})
     return jsonify({"message": "Upload deleted"})
+
+@app.route("/api/models/pneumonia/predict", methods=["POST"])
+@jwt_required()
+def predict_pneumonia():
+    user = current_user()
+    if not user or user.get("role") not in {"doctor", "admin", "superadmin"}:
+        return jsonify({"error": "Only doctors and administrators can use this model"}), 403
+
+    image = request.files.get("file")
+    if not image or not image.filename:
+        return jsonify({"error": "A chest X-ray image is required"}), 400
+    extension = image.filename.rsplit(".", 1)[-1].lower() if "." in image.filename else ""
+    if extension not in {"png", "jpg", "jpeg", "webp"}:
+        return jsonify({"error": "Upload a PNG, JPG, JPEG, or WEBP image"}), 415
+    if request.content_length and request.content_length > MAX_UPLOAD_BYTES:
+        return jsonify({"error": "Image must be 15 MB or smaller"}), 413
+    try:
+        response = requests.post(
+            f"{MODEL_SERVICE_URL}/predict",
+            files={"file": (image.filename, image.stream, image.mimetype)},
+            timeout=120,
+        )
+        if response.status_code != 200:
+            return jsonify(response.json()), response.status_code
+        return jsonify(response.json())
+    except requests.RequestException:
+        logging.error("Pneumonia model service is unavailable at %s", MODEL_SERVICE_URL)
+        return jsonify({"error": "Pneumonia model service is not running"}), 503
+    except Exception as error:
+        logging.error("Pneumonia prediction failed: %s", error, exc_info=True)
+        return jsonify({"error": "The Pneumonia model could not process this image"}), 500
 
 # ─── Auth Routes ──────────────────────────────────────────────────────────────
 
@@ -514,6 +552,10 @@ def update_prescription(rx_id):
         update_data["patientBloodGroup"] = data["bloodGroup"]
     if "followupDate" in data:
         update_data["followupDate"] = data["followupDate"]
+    if "prescriptionPdfUrl" in data:
+        update_data["prescriptionPdfUrl"] = data["prescriptionPdfUrl"]
+    if "prescriptionPdfUploadId" in data:
+        update_data["prescriptionPdfUploadId"] = data["prescriptionPdfUploadId"]
 
     if update_data:
         db.prescriptions.update_one({"id": rx_id}, {"$set": update_data})
