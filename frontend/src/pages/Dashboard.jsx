@@ -738,19 +738,19 @@ function LabDashboard() {
   const uploadReportDocument = async (event) => {
     const file = event.target.files?.[0];
     if (!file || !selectedRequest) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      setUploadingDoc(true);
-      try {
-        await api.patch(`/lab/requests/${selectedRequest.id}`, { reportDocumentUrl: reader.result });
-        await fetchRequests();
-        setSelectedRequest({ ...selectedRequest, reportDocumentUrl: reader.result });
-      } catch (error) {
-        console.error(error);
-      }
-      setUploadingDoc(false);
-    };
-    reader.readAsDataURL(file);
+    setUploadingDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("assetType", "lab_report");
+      formData.append("labRequestId", String(selectedRequest.id));
+      const uploaded = await api.upload("/uploads", formData);
+      await fetchRequests();
+      setSelectedRequest({ ...selectedRequest, reportDocumentUrl: uploaded.url, reportUrl: uploaded.url, uploadId: uploaded.id });
+    } catch (error) {
+      console.error(error);
+    }
+    setUploadingDoc(false);
   };
 
   const markReady = async () => {

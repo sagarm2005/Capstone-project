@@ -4,3 +4,4 @@ flask-jwt-extended
 pymongo
 openai
 python-dotenv
+cloudinary

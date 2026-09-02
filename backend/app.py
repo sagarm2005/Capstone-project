@@ -1,12 +1,16 @@
 import os
 import logging
 import json
+import mimetypes
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, create_access_token
 from db import get_db, serialize, serialize_list
 from openai import OpenAI
+import cloudinary
+import cloudinary.uploader
+import cloudinary.utils
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,6 +20,20 @@ app.secret_key = os.environ.get("SESSION_SECRET", "medicore-dev-secret")
 app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET", "medicore-jwt-secret")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=1)
 jwt = JWTManager(app)
+
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+    secure=True,
+)
+
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+UPLOAD_TYPES = {
+    "lab_report": {"roles": {"lab", "admin", "superadmin"}, "extensions": {"pdf", "png", "jpg", "jpeg", "webp"}},
+    "prescription": {"roles": {"doctor", "admin", "superadmin"}, "extensions": {"pdf", "png", "jpg", "jpeg", "webp"}},
+    "hospital_image": {"roles": {"doctor", "admin", "superadmin"}, "extensions": {"png", "jpg", "jpeg", "webp"}},
+}
 
 # Initialize OpenAI Client
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -67,6 +85,134 @@ def check_drug_interactions(medicines):
             "message": f"Interaction Detected ({level}): {inter.get('Drug_A')} and {inter.get('Drug_B')} may interact."
         })
     return validations
+
+def current_user():
+    db = get_db()
+    user_id = int(get_jwt_identity())
+    return db.users.find_one({"id": user_id})
+
+def signed_cloudinary_url(public_id, resource_type):
+    url, _ = cloudinary.utils.cloudinary_url(
+        public_id,
+        resource_type=resource_type,
+        type="authenticated",
+        secure=True,
+        sign_url=True,
+    )
+    return url
+
+def can_manage_upload(user, upload):
+    if user["role"] in {"admin", "superadmin"}:
+        return True
+    if upload.get("uploaderId") != user["id"]:
+        return False
+    if upload.get("assetType") == "lab_report":
+        lab_request = get_db().lab_requests.find_one({"id": upload.get("labRequestId")})
+        return user["role"] == "lab" and lab_request and lab_request.get("labId") == user["id"]
+    return user["role"] == "doctor"
+
+@app.route("/api/uploads", methods=["POST"])
+@jwt_required()
+def upload_file():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    file = request.files.get("file")
+    asset_type = request.form.get("assetType", "").strip().lower()
+    policy = UPLOAD_TYPES.get(asset_type)
+    if not file or not file.filename:
+        return jsonify({"error": "A file is required"}), 400
+    if not policy or user["role"] not in policy["roles"]:
+        return jsonify({"error": "Your role cannot upload this asset type"}), 403
+    if request.content_length and request.content_length > MAX_UPLOAD_BYTES:
+        return jsonify({"error": "File must be 15 MB or smaller"}), 413
+
+    extension = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if extension not in policy["extensions"]:
+        return jsonify({"error": "Unsupported file type"}), 415
+
+    lab_request_id = request.form.get("labRequestId")
+    prescription_id = request.form.get("prescriptionId")
+    db = get_db()
+    if asset_type == "lab_report":
+        try:
+            lab_request_id = int(lab_request_id)
+        except (TypeError, ValueError):
+            return jsonify({"error": "labRequestId is required"}), 400
+        lab_request = db.lab_requests.find_one({"id": lab_request_id})
+        if not lab_request or (user["role"] == "lab" and lab_request.get("labId") != user["id"]):
+            return jsonify({"error": "You cannot upload to this lab request"}), 403
+    if prescription_id:
+        try:
+            prescription_id = int(prescription_id)
+        except ValueError:
+            return jsonify({"error": "prescriptionId must be a number"}), 400
+        prescription = db.prescriptions.find_one({"id": prescription_id})
+        if not prescription or (user["role"] == "doctor" and prescription.get("doctorId") != user["id"]):
+            return jsonify({"error": "You cannot upload to this prescription"}), 403
+
+    resource_type = "image" if extension != "pdf" else "raw"
+    try:
+        result = cloudinary.uploader.upload(
+            file.stream,
+            resource_type=resource_type,
+            type="authenticated",
+            folder=f"medicore/{asset_type}/{user['id']}",
+            context={"original_filename": file.filename},
+        )
+    except Exception as error:
+        logging.error("Cloudinary upload failed: %s", error)
+        return jsonify({"error": "File upload failed"}), 502
+
+    upload_record = {
+        "id": next_id("uploads"),
+        "assetType": asset_type,
+        "uploaderId": user["id"],
+        "uploaderRole": user["role"],
+        "originalFilename": file.filename,
+        "format": extension,
+        "mimeType": file.mimetype or mimetypes.guess_type(file.filename)[0],
+        "bytes": result.get("bytes"),
+        "publicId": result["public_id"],
+        "resourceType": resource_type,
+        "labRequestId": lab_request_id,
+        "prescriptionId": prescription_id,
+        "createdAt": datetime.utcnow().isoformat() + "Z",
+    }
+    db.uploads.insert_one(upload_record)
+    if lab_request_id:
+        db.lab_requests.update_one({"id": lab_request_id}, {"$set": {"reportUrl": signed_cloudinary_url(result["public_id"], resource_type), "uploadId": upload_record["id"]}})
+    return jsonify({
+        "id": upload_record["id"],
+        "assetType": asset_type,
+        "url": signed_cloudinary_url(result["public_id"], resource_type),
+        "filename": file.filename,
+    }), 201
+
+@app.route("/api/uploads/<int:upload_id>", methods=["DELETE"])
+@jwt_required()
+def delete_file(upload_id):
+    user = current_user()
+    upload_record = get_db().uploads.find_one({"id": upload_id})
+    if not user or not upload_record:
+        return jsonify({"error": "Upload not found"}), 404
+    if not can_manage_upload(user, upload_record):
+        return jsonify({"error": "You cannot delete this upload"}), 403
+    try:
+        cloudinary.uploader.destroy(
+            upload_record["publicId"],
+            resource_type=upload_record["resourceType"],
+            type="authenticated",
+        )
+    except Exception as error:
+        logging.error("Cloudinary delete failed: %s", error)
+        return jsonify({"error": "File deletion failed"}), 502
+    db = get_db()
+    db.uploads.delete_one({"id": upload_id})
+    if upload_record.get("labRequestId"):
+        db.lab_requests.update_one({"id": upload_record["labRequestId"], "uploadId": upload_id}, {"$unset": {"reportUrl": "", "uploadId": ""}})
+    return jsonify({"message": "Upload deleted"})
 
 # ─── Auth Routes ──────────────────────────────────────────────────────────────
 
@@ -489,51 +635,6 @@ def lab_requests():
 
     return jsonify(serialize(new_req)), 201
 
-@app.route("/api/lab/requests/<int:req_id>/report", methods=["POST"])
-def submit_lab_report(req_id):
-    db = get_db()
-    data = request.get_json()
-    # Simulate AI analysis for more "premium" feel
-    analysis = {
-        "primaryCondition": "Inconclusive - Further observation required",
-        "confidence": 0.92,
-        "secondaryConditions": [
-            {"condition": "Normal variation", "confidence": 0.05}
-        ],
-        "disclaimer": "AI suggestion only. Final diagnosis must be confirmed by a radiologist."
-    }
-    
-    update_data = {
-        "status": "ready",
-        "reportUrl": data.get("reportUrl"),
-        "aiAnalysis": analysis,
-        "updatedAt": datetime.utcnow().isoformat() + "Z"
-    }
-    db.lab_requests.update_one({"id": req_id}, {"$set": update_data})
-    
-    req = db.lab_requests.find_one({"id": req_id})
-    if req:
-        db.notifications.insert_one({
-            "id": next_id("notifications"),
-            "userId": req["patientId"],
-            "type": "lab_report",
-            "title": "Lab Report Ready",
-            "message": f"Your lab report for {req['testType']} is ready for review.",
-            "read": False,
-            "createdAt": datetime.utcnow().isoformat() + "Z"
-        })
-        if req.get("doctorId"):
-            db.notifications.insert_one({
-                "id": next_id("notifications"),
-                "userId": req["doctorId"],
-                "type": "lab_report",
-                "title": "Lab Report Submitted",
-                "message": f"A report for {req['patientName']} has been submitted by the lab assistant.",
-                "read": False,
-                "createdAt": datetime.utcnow().isoformat() + "Z"
-            })
-    return jsonify({"message": "Report submitted successfully"})
-
 @app.route("/api/prescriptions/<int:rx_id>", methods=["GET"])
 def prescription_detail(rx_id):
     db = get_db()
@@ -584,8 +685,11 @@ def lab_report(req_id):
     lab_req = db.lab_requests.find_one({"id": req_id})
     if not lab_req:
         return jsonify({"error": "Not found"}), 404
+    report_url = (request.get_json() or {}).get("reportUrl") or lab_req.get("reportUrl")
+    if not report_url:
+        return jsonify({"error": "Upload a report before marking it ready"}), 400
     ai = {"primaryCondition": "Pneumonia", "confidence": 0.87, "secondaryConditions": [{"condition": "Normal", "confidence": 0.09}], "disclaimer": "AI analysis is assistive only. Clinical judgment required."}
-    db.lab_requests.update_one({"id": req_id}, {"$set": {"reportUrl": request.get_json().get("reportUrl"), "status": "ready", "aiAnalysis": ai}})
+    db.lab_requests.update_one({"id": req_id}, {"$set": {"reportUrl": report_url, "status": "ready", "aiAnalysis": ai}})
     return jsonify(serialize(db.lab_requests.find_one({"id": req_id})))
 
 @app.route("/api/profile", methods=["GET"])

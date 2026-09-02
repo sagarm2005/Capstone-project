@@ -53,7 +53,9 @@ export default function Lab() {
   };
 
   const markReady = async (id) => {
-    await api.post(`/lab/requests/${id}/report`, { reportUrl: `/reports/report_${id}.pdf` });
+    const requestToReady = requests.find((request) => request.id === id) || (selected?.id === id ? selected : null);
+    if (!requestToReady?.reportUrl && !requestToReady?.reportImageUrl) return;
+    await api.post(`/lab/requests/${id}/report`, { reportUrl: requestToReady.reportUrl || requestToReady.reportImageUrl });
     fetchLab();
     if (selected?.id === id) {
       const updated = requests.find((r) => r.id === id);
@@ -64,20 +66,19 @@ export default function Lab() {
   const uploadImage = async (event) => {
     const file = event.target.files?.[0];
     if (!file || !selected) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      setUploading(true);
-      try {
-        const reportImageUrl = reader.result;
-        await api.patch(`/lab/requests/${selected.id}`, { reportImageUrl });
-        fetchLab();
-        setSelected({ ...selected, reportImageUrl });
-      } catch (err) {
-        console.error(err);
-      }
-      setUploading(false);
-    };
-    reader.readAsDataURL(file);
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("assetType", "lab_report");
+      formData.append("labRequestId", String(selected.id));
+      const uploaded = await api.upload("/uploads", formData);
+      fetchLab();
+      setSelected({ ...selected, reportImageUrl: uploaded.url, reportUrl: uploaded.url, uploadId: uploaded.id });
+    } catch (err) {
+      console.error(err);
+    }
+    setUploading(false);
   };
 
   const isImageUrl = (url) => {
