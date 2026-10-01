@@ -24,7 +24,8 @@ import {
   Activity,
   HeartPulse,
   Pill,
-  AlertTriangle
+  AlertTriangle,
+  Users
 } from "lucide-react";
 import DoctorHospitalProfileModal from "@/components/DoctorHospitalProfileModal";
 import PatientProfileModal from "@/components/PatientProfileModal";
