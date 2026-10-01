@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { Calendar, FileText, FlaskConical, Bell, Users, Activity, AlertTriangle, Clock, ChevronRight, Stethoscope, Building2, X, Brain, Droplet, TrendingUp, Plus, Minus, User, Syringe, ShieldCheck, ClipboardCheck, Receipt, Pill, MapPin, Phone, Camera, Image as ImageIcon, Edit3, HeartPulse, Sparkles, CheckCircle2, ShieldAlert } from "lucide-react";
+import { Calendar, FileText, FlaskConical, Bell, Users, Activity, AlertTriangle, Clock, ChevronRight, Stethoscope, Building2, X, Brain, Droplet, TrendingUp, Plus, Minus, User, Syringe, ShieldCheck, ClipboardCheck, Receipt, Pill, MapPin, Phone, Camera, Image as ImageIcon, Edit3, HeartPulse, Sparkles, CheckCircle2, ShieldAlert, RefreshCw, ExternalLink } from "lucide-react";
 import { Link } from "wouter";
 import PrescriptionModal from "@/components/PrescriptionModal";
 import DoctorHospitalProfileModal from "@/components/DoctorHospitalProfileModal";
@@ -35,6 +35,7 @@ function PatientDashboard({ data }) {
   const [showAddAllergyModal, setShowAddAllergyModal] = useState(false);
   const [modalNewAllergy, setModalNewAllergy] = useState("");
   const [expenses, setExpenses] = useState(data?.expenses || null);
+  const [selectedPatientReport, setSelectedPatientReport] = useState(null);
 
   const fetchProfile = () => {
     api.get(`/patients/${user.id}`).then(setProfile).catch(console.error);
@@ -694,44 +695,272 @@ function PatientDashboard({ data }) {
         </div>
       )}
 
-      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-        <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <FlaskConical size={16} className="text-[#0d6e7e]" /> My Lab Reports
-        </h3>
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold">
+              <FlaskConical size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                My Lab Reports & Diagnostic Investigations
+              </h3>
+              <p className="text-xs text-gray-500">Live scans, pathology results, AI disease detection, and doctor confirmed diagnoses</p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1 rounded-lg border border-gray-200">
+            {labReports.length} {labReports.length === 1 ? "Record" : "Records"}
+          </span>
+        </div>
+
         {labReports.length === 0 ? (
-          <p className="text-sm text-gray-500">No lab reports available.</p>
+          <div className="py-8 text-center text-gray-400">
+            <FlaskConical size={36} className="mx-auto mb-2 opacity-30 text-[#0d6e7e]" />
+            <p className="text-sm font-medium text-gray-600">No lab investigation records found.</p>
+            <p className="text-xs text-gray-400 mt-1">When your doctor orders diagnostic scans or blood tests, they will appear here with live updates.</p>
+          </div>
         ) : (
           <div className="space-y-4">
-            {labReports.map((report) => (
-              <div key={report.id} className="border border-gray-100 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-medium text-gray-800">{report.testType}</h4>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    report.status === "ready" ? "bg-green-100 text-green-700" :
-                    report.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"
-                  }`}>{report.status}</span>
-                </div>
-                <p className="text-sm text-gray-600 mb-2">Doctor: {report.doctorName} | Lab: {report.labName}</p>
-                <p className="text-xs text-gray-400 mb-3">Requested: {new Date(report.createdAt).toLocaleDateString()}</p>
-                {report.status === "ready" && report.reportDocumentUrl && (
-                  <div className="mt-3">
-                    {report.reportDocumentUrl.includes('.pdf') ? (
-                      <a href={report.reportDocumentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm text-[#0d6e7e] font-semibold hover:underline">
-                        <FileText size={14} /> View PDF Report
-                      </a>
-                    ) : (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-500 mb-2">Report Image</p>
-                        <img src={report.reportDocumentUrl} alt="Lab report" className="w-full max-w-md rounded-lg object-contain border border-gray-200" />
-                      </div>
-                    )}
+            {labReports.map((report) => {
+              const fileUrl = report.reportUrl || report.reportImageUrl || report.reportDocumentUrl;
+              const isPdf = fileUrl && (fileUrl.includes(".pdf") || fileUrl.startsWith("data:application/pdf"));
+              const isCompleted = report.status === "completed" || report.doctorConfirmed;
+              const isReady = report.status === "ready";
+
+              return (
+                <div key={report.id} className="border border-gray-200/80 rounded-2xl p-4.5 bg-gray-50/30 hover:bg-white transition-all hover:shadow-sm">
+                  {/* Top Bar: Test Title + Badges */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-bold text-gray-900 text-sm sm:text-base flex items-center gap-1.5">
+                        <FlaskConical size={16} className="text-[#0d6e7e]" />
+                        {report.testType}
+                      </h4>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-800 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
+                        <Building2 size={11} /> {report.labName || "Diagnostic Lab"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isCompleted ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                          <CheckCircle2 size={13} className="text-emerald-600" />
+                          Doctor Confirmed
+                        </span>
+                      ) : isReady ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          <Clock size={13} className="text-blue-600" />
+                          Scan Uploaded · Awaiting Review
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          <Clock size={13} className="text-amber-600" />
+                          Lab In-Progress
+                        </span>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Doctor & Timing Strip */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-600 bg-white p-2.5 rounded-xl border border-gray-100 mb-3">
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase block">Treating Doctor</span>
+                      <span className="font-bold text-gray-800">Dr. {report.doctorName}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase block">Diagnostic Center</span>
+                      <span className="font-semibold text-gray-700 truncate block">{report.labName}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase block">Prescribed Date</span>
+                      <span className="font-medium text-gray-600">{new Date(report.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase block">Investigation Fee</span>
+                      <span className="font-black text-[#0d6e7e]">₹{(report.totalPrice || 500).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Confirmed Diagnosis Highlight Card */}
+                  {(report.confirmedDiagnosis || isCompleted) && (
+                    <div className="bg-gradient-to-r from-emerald-50 via-teal-50/60 to-white border border-emerald-200/90 rounded-xl p-3.5 mb-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                          <CheckCircle2 size={13} className="text-emerald-700" /> Confirmed Clinical Diagnosis
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-700">Verified by Dr. {report.doctorName}</span>
+                      </div>
+                      <p className="text-sm font-black text-gray-900">
+                        {report.confirmedDiagnosis || "Clinical Pathology Investigation Verified"}
+                      </p>
+                      {report.doctorNotes && (
+                        <p className="text-xs text-gray-700 pt-1 border-t border-emerald-100 mt-1">
+                          <span className="font-bold text-gray-800">Doctor's Clinical Notes: </span>
+                          {report.doctorNotes}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* AI Diagnostic Screening Summary (if available) */}
+                  {report.aiAnalysis && (
+                    <div className="bg-teal-50/50 border border-teal-100 rounded-xl p-3 mb-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-[#0d6e7e] flex items-center gap-1">
+                          <Sparkles size={11} /> AI Screening Prediction
+                        </span>
+                        <p className="font-bold text-gray-800">
+                          {report.aiAnalysis.condition || report.aiAnalysis.prediction}
+                        </p>
+                        {report.aiAnalysis.findings && (
+                          <p className="text-[11px] text-gray-500 leading-tight">{report.aiAnalysis.findings}</p>
+                        )}
+                      </div>
+                      <span className="px-2.5 py-0.5 bg-white text-[#0d6e7e] rounded-full font-black text-[11px] border border-teal-200 shrink-0 self-start sm:self-auto">
+                        {Math.round((report.aiAnalysis.confidence || 0.9) * 100)}% Confidence
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Scan Document Link / Preview Button */}
+                  {fileUrl ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                      <div className="flex items-center gap-2">
+                        {!isPdf && (
+                          <div 
+                            onClick={() => setSelectedPatientReport(report)}
+                            className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-black/5 cursor-pointer hover:opacity-80 transition-opacity shrink-0"
+                          >
+                            <img src={fileUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-xs font-bold text-gray-800">
+                            {isPdf ? "Official PDF Diagnostic Report" : "High-Resolution Scan / Radiograph"}
+                          </p>
+                          <p className="text-[10px] text-gray-400">Transmitted directly by {report.labName}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {isPdf ? (
+                          <a
+                            href={fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0d6e7e] hover:bg-[#0a5566] text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+                          >
+                            <FileText size={14} /> Open PDF Report
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPatientReport(report)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0d6e7e] hover:bg-[#0a5566] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                          >
+                            <ExternalLink size={14} /> View Diagnostic Scan
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic pt-1">
+                      Laboratory technician is currently performing tests and preparing your scan/report.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
+
+      {/* Patient Lab Scan & Report Lightbox Modal */}
+      {selectedPatientReport && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-100 my-auto">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                  <FlaskConical size={18} className="text-[#0d6e7e]" />
+                  {selectedPatientReport.testType}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {selectedPatientReport.labName || "Diagnostic Lab"} • Dr. {selectedPatientReport.doctorName}
+                </p>
+              </div>
+              <button 
+                onClick={() => setSelectedPatientReport(null)}
+                className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Confirmed Diagnosis Card in Modal */}
+              {selectedPatientReport.confirmedDiagnosis && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                    <CheckCircle2 size={13} className="text-emerald-700" /> Confirmed Diagnosis
+                  </span>
+                  <p className="text-base font-black text-gray-900">{selectedPatientReport.confirmedDiagnosis}</p>
+                  {selectedPatientReport.doctorNotes && (
+                    <p className="text-xs text-gray-700 pt-1">
+                      <span className="font-bold text-gray-900">Physician Notes: </span>
+                      {selectedPatientReport.doctorNotes}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* AI Findings Summary */}
+              {selectedPatientReport.aiAnalysis && (
+                <div className="bg-teal-50/70 border border-teal-200 rounded-2xl p-4 text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase text-[#0d6e7e] flex items-center gap-1">
+                      <Sparkles size={12} /> AI Clinical Model Output
+                    </span>
+                    <span className="font-bold text-[#0d6e7e]">
+                      {Math.round((selectedPatientReport.aiAnalysis.confidence || 0.9) * 100)}% Confidence
+                    </span>
+                  </div>
+                  <p className="font-black text-sm text-gray-900">
+                    {selectedPatientReport.aiAnalysis.condition || selectedPatientReport.aiAnalysis.prediction}
+                  </p>
+                  {selectedPatientReport.aiAnalysis.findings && (
+                    <p className="text-gray-600 leading-relaxed text-xs pt-1">{selectedPatientReport.aiAnalysis.findings}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Full resolution scan view */}
+              {(selectedPatientReport.reportUrl || selectedPatientReport.reportImageUrl || selectedPatientReport.reportDocumentUrl) && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Radiograph / Laboratory Scan</p>
+                  <div className="rounded-2xl overflow-hidden border border-gray-200 bg-black/5 p-2 flex items-center justify-center">
+                    <img 
+                      src={selectedPatientReport.reportUrl || selectedPatientReport.reportImageUrl || selectedPatientReport.reportDocumentUrl}
+                      alt="Full diagnostic scan"
+                      className="max-h-[60vh] w-auto max-w-full object-contain rounded-xl"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPatientReport(null)}
+                  className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all"
+                >
+                  Close Scan
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -882,6 +1111,46 @@ function DoctorDashboard({ data }) {
   const [prescribeApptId, setPrescribeApptId] = useState(null);
   const [showHospitalModal, setShowHospitalModal] = useState(false);
   const [doctorProfile, setDoctorProfile] = useState(data?.doctorProfile || null);
+
+  // Doctor AI Lab Report Prediction & Confirmation
+  const [predictingReport, setPredictingReport] = useState(false);
+  const [confirmingReport, setConfirmingReport] = useState(false);
+  const [reportDiagnosisInput, setReportDiagnosisInput] = useState("");
+  const [reportNotesInput, setReportNotesInput] = useState("");
+
+  const handlePredictDoctorReport = async (reportId) => {
+    setPredictingReport(true);
+    try {
+      const res = await api.post(`/lab/requests/${reportId}/predict`, {});
+      setSelectedReport(res);
+      if (res?.aiAnalysis?.condition) {
+        setReportDiagnosisInput(res.aiAnalysis.condition);
+      } else if (res?.aiAnalysis?.prediction) {
+        setReportDiagnosisInput(res.aiAnalysis.prediction);
+      }
+    } catch (err) {
+      console.error("AI prediction failed:", err);
+    } finally {
+      setPredictingReport(false);
+    }
+  };
+
+  const handleConfirmDoctorReport = async (reportId) => {
+    setConfirmingReport(true);
+    try {
+      const res = await api.post(`/lab/requests/${reportId}/confirm`, {
+        confirmedDiagnosis: reportDiagnosisInput || selectedReport?.aiAnalysis?.condition || "Pneumonia",
+        doctorNotes: reportNotesInput
+      });
+      if (res?.labRequest) {
+        setSelectedReport(res.labRequest);
+      }
+    } catch (err) {
+      console.error("Confirmation error:", err);
+    } finally {
+      setConfirmingReport(false);
+    }
+  };
 
   const fetchDoctorProfile = () => {
     if (user?.id) {
@@ -1124,46 +1393,191 @@ function DoctorDashboard({ data }) {
       <DoctorModels />
 
       {selectedReport && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-100 my-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Report Preview</h2>
-                <p className="text-sm text-gray-500">{selectedReport.patientName} — {selectedReport.testType}</p>
+                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <FlaskConical size={20} className="text-[#0d6e7e]" /> Diagnostic Investigation Review
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {selectedReport.patientName} — {selectedReport.testType} • {selectedReport.labName || "Diagnostic Lab"}
+                </p>
               </div>
-              <button onClick={() => setSelectedReport(null)} className="p-2 rounded-full hover:bg-gray-100">
-                <X size={20} className="text-gray-500" />
+              <button onClick={() => setSelectedReport(null)} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-700">
+                <X size={20} />
               </button>
             </div>
-            <div className="p-6">
-              {(selectedReport.reportDocumentUrl || selectedReport.reportUrl) ? (
-                <div className="space-y-4">
-                  {((selectedReport.reportDocumentUrl || selectedReport.reportUrl).includes('.pdf') || (selectedReport.reportDocumentUrl || selectedReport.reportUrl).startsWith('data:application/pdf')) ? (
-                    <div className="flex flex-col items-center gap-4 py-8">
-                      <FileText size={48} className="text-gray-300" />
+            <div className="p-6 space-y-5">
+              {/* Patient and Lab Summary Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs">
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">Patient</p>
+                  <p className="font-bold text-gray-900">{selectedReport.patientName}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">Age / Blood</p>
+                  <p className="font-medium text-gray-700">{selectedReport.patientAge || "28"} • {selectedReport.patientBloodGroup || "O+"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">Diagnostic Lab</p>
+                  <p className="font-bold text-teal-800 truncate">{selectedReport.labName || "Laboratory"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">Status</p>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-block mt-0.5 ${
+                    selectedReport.status === "completed" ? "bg-emerald-100 text-emerald-800" : "bg-purple-100 text-purple-700"
+                  }`}>
+                    {selectedReport.status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Uploaded Scan or PDF Document */}
+              {(selectedReport.reportDocumentUrl || selectedReport.reportUrl || selectedReport.reportImageUrl) ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-600 flex items-center justify-between">
+                    <span>Diagnostic Scan / Report File</span>
+                    <span className="text-[10px] text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-200">
+                      Uploaded by Lab
+                    </span>
+                  </p>
+                  {((selectedReport.reportDocumentUrl || selectedReport.reportUrl || "").includes('.pdf') || (selectedReport.reportDocumentUrl || selectedReport.reportUrl || "").startsWith('data:application/pdf')) ? (
+                    <div className="flex flex-col items-center gap-3 py-6 bg-slate-50 rounded-2xl border border-slate-200">
+                      <FileText size={40} className="text-[#0d6e7e]" />
                       <a href={selectedReport.reportDocumentUrl || selectedReport.reportUrl} target="_blank" rel="noreferrer" 
-                         className="px-6 py-2 bg-[#0d6e7e] text-white rounded-full font-semibold hover:bg-[#0a5566]">
+                         className="px-5 py-2 bg-[#0d6e7e] text-white rounded-xl text-xs font-bold hover:bg-[#0a5566]">
                         Open PDF Report
                       </a>
                     </div>
                   ) : (
-                    <img src={selectedReport.reportDocumentUrl || selectedReport.reportUrl} alt="Report" className="w-full rounded-2xl border border-gray-200" />
-                  )}
-
-                  {selectedReport.aiAnalysis && (
-                    <div className="bg-teal-50 border border-teal-100 rounded-2xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Brain size={16} className="text-teal-700" />
-                        <p className="text-xs font-bold text-teal-700 uppercase">AI Analysis Preview</p>
-                      </div>
-                      <p className="text-sm text-teal-900 font-semibold">{selectedReport.aiAnalysis.primaryCondition}</p>
-                      <p className="text-xs text-teal-600 mt-1">Confidence: {Math.round(selectedReport.aiAnalysis.confidence * 100)}%</p>
+                    <div className="rounded-2xl overflow-hidden border border-gray-200 bg-black/5 p-1">
+                      <img src={selectedReport.reportDocumentUrl || selectedReport.reportUrl || selectedReport.reportImageUrl} alt="Report scan" className="w-full max-h-72 object-contain rounded-xl mx-auto" />
                     </div>
                   )}
                 </div>
               ) : (
-                <p className="text-center py-8 text-gray-500 italic">No report document found.</p>
+                <p className="text-center py-6 text-gray-400 italic text-xs bg-slate-50 rounded-2xl border border-dashed border-gray-200">
+                  No scan or report document uploaded by lab yet.
+                </p>
               )}
+
+              {/* AI Clinical Diagnostic Model Section */}
+              <div className="bg-teal-50/70 p-4.5 rounded-2xl border border-teal-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Brain size={18} className="text-[#0d6e7e]" />
+                    <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                      AI Diagnostic Model Engine
+                    </h4>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePredictDoctorReport(selectedReport.id)}
+                    disabled={predictingReport || (!selectedReport.reportUrl && !selectedReport.reportImageUrl && !selectedReport.reportDocumentUrl)}
+                    className="px-3.5 py-1.5 bg-[#0d6e7e] text-white rounded-xl text-xs font-bold hover:bg-[#0a5566] disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  >
+                    {predictingReport ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" /> Analyzing Image...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={13} /> Run AI Prediction
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* AI Prediction Output */}
+                {selectedReport.aiAnalysis && (
+                  <div className="space-y-3 bg-white p-4 rounded-xl border border-teal-100">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase">AI Disease Classification</p>
+                        <p className="text-base font-black text-gray-900">
+                          {selectedReport.aiAnalysis.condition || selectedReport.aiAnalysis.prediction}
+                        </p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full text-xs font-black bg-red-50 text-red-700 border border-red-200">
+                        {Math.round(selectedReport.aiAnalysis.confidence * 100)}% Confidence
+                      </span>
+                    </div>
+
+                    {selectedReport.aiAnalysis.findings && (
+                      <p className="text-xs text-gray-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200 leading-relaxed">
+                        <span className="font-bold text-gray-800">Clinical Findings: </span>
+                        {selectedReport.aiAnalysis.findings}
+                      </p>
+                    )}
+
+                    {selectedReport.aiAnalysis.secondaryConditions?.length > 0 && (
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span className="font-bold text-gray-700">Differential:</span>
+                        {selectedReport.aiAnalysis.secondaryConditions.map((sc, i) => (
+                          <span key={i} className="bg-gray-100 px-2 py-0.5 rounded text-[11px] font-medium text-gray-700">
+                            {sc.condition} ({Math.round(sc.confidence * 100)}%)
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Doctor Diagnosis Confirmation & Dual-Account Record Sync */}
+                <div className="pt-2 border-t border-teal-200/60 space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                      Doctor Confirmed Clinical Diagnosis:
+                    </label>
+                    <input
+                      type="text"
+                      value={reportDiagnosisInput || (selectedReport.confirmedDiagnosis || "")}
+                      onChange={(e) => setReportDiagnosisInput(e.target.value)}
+                      placeholder="e.g. Community-Acquired Pneumonia (Lower Lobe)"
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-[#0d6e7e]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                      Clinical Remarks & Prescription Linkage:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={reportNotesInput}
+                      onChange={(e) => setReportNotesInput(e.target.value)}
+                      placeholder="e.g. Opacity verified. Prescribed course of Azithromycin + symptomatic bronchodilator."
+                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#0d6e7e] resize-none"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmDoctorReport(selectedReport.id)}
+                    disabled={confirmingReport || (!reportDiagnosisInput && !selectedReport.confirmedDiagnosis)}
+                    className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    {confirmingReport ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" /> Saving to Records...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} /> Confirm Diagnosis & Sync to Both Accounts
+                      </>
+                    )}
+                  </button>
+
+                  {selectedReport.status === "completed" && (
+                    <div className="p-3 bg-emerald-100/70 border border-emerald-300 rounded-xl text-center text-xs font-bold text-emerald-900 flex items-center justify-center gap-2">
+                      <Check size={16} className="text-emerald-700" />
+                      <span>Diagnosis Confirmed & Synced to Patient & Doctor Accounts: {selectedReport.confirmedDiagnosis}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

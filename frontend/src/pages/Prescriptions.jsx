@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { jsPDF } from "jspdf";
 import { api } from "@/lib/api";
 import PrescriptionModal from "@/components/PrescriptionModal";
-import { FileText, Plus, X, CheckCircle, AlertTriangle, XCircle, Printer, Download, Mail, Phone, MapPin } from "lucide-react";
+import { FileText, Plus, X, CheckCircle, AlertTriangle, XCircle, Printer, Download, Mail, Phone, MapPin, FlaskConical, CheckCircle2, Sparkles, ExternalLink } from "lucide-react";
 
 function ValidationIcon({ type }) {
   if (type === "success") return <CheckCircle size={14} className="text-green-500 shrink-0" />;
@@ -200,6 +200,15 @@ export default function Prescriptions() {
               <p className="text-xs text-gray-400">{rx.medicines?.length} medicine(s)</p>
               <p className="text-xs text-gray-400">{new Date(rx.createdAt).toLocaleDateString()}</p>
             </div>
+            {rx.labConfirmedDiagnosis ? (
+              <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                <CheckCircle2 size={12} className="text-emerald-600" /> Confirmed: {rx.labConfirmedDiagnosis}
+              </div>
+            ) : (rx.selectedLabName || rx.labTests?.length > 0) ? (
+              <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                <FlaskConical size={11} /> Lab: {rx.selectedLabName || rx.labTests?.[0]}
+              </div>
+            ) : null}
             {rx.validations?.some((v) => v.type === "error") && (
               <div className="mt-2 flex items-center gap-1 text-xs text-red-600">
                 <XCircle size={12} /> Allergy conflict detected
@@ -361,21 +370,74 @@ export default function Prescriptions() {
               {/* Lab & Notes */}
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-3">
-                  <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest">Lab Tests Required</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest">Diagnostic Investigations</p>
+                    {selected.selectedLabName && (
+                      <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                        {selected.selectedLabName}
+                      </span>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
-                    {selected.labTests?.length > 0 ? (
+                    {selected.labOrderDetails?.length > 0 ? (
+                      <div className="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden bg-gray-50/50">
+                        {selected.labOrderDetails.map((t, i) => (
+                          <div key={i} className="flex justify-between items-center text-xs p-2.5 bg-white">
+                            <div>
+                              <p className="font-bold text-gray-900">{t.name}</p>
+                              {t.category && <p className="text-[10px] text-gray-400">{t.category}</p>}
+                            </div>
+                            <span className="font-black text-[#0d6e7e]">₹{t.price}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-center text-xs p-2.5 bg-teal-50/60 font-bold border-t border-teal-100">
+                          <span className="text-gray-700">Rate Card Total:</span>
+                          <span className="font-black text-sm text-[#0d6e7e]">₹{selected.labTotalCost || selected.labOrderDetails.reduce((a, b) => a + (b.price || 0), 0)}</span>
+                        </div>
+                      </div>
+                    ) : selected.labTests?.length > 0 ? (
                       <div className="flex flex-wrap gap-2">
-                        {selected.labTests.map((t, i) => <span key={i} className="px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-black border border-purple-100 tracking-tight underline italic decoration-purple-300 underline-offset-2">{t}</span>)}
+                        {selected.labTests.map((t, i) => (
+                          <span key={i} className="px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-black border border-purple-100 tracking-tight">
+                            {t}
+                          </span>
+                        ))}
                       </div>
                     ) : (
                       <p className="text-xs text-gray-400 italic">No lab tests recommended.</p>
                     )}
-                    {selected.selectedLabId && (
-                      <div className="p-3 bg-amber-50 rounded-lg border border-amber-100 mt-2">
-                        <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Assigned Lab</p>
-                        <p className="text-xs font-bold text-amber-900 flex items-center gap-2 italic">
-                          <span>Request sent to specialized diagnostic center.</span>
+
+                    {selected.selectedLabId && !selected.labOrderDetails?.length && (
+                      <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-100">
+                        <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-0.5">Assigned Lab</p>
+                        <p className="text-xs font-bold text-amber-900 italic">
+                          Request routed to {selected.selectedLabName || "Diagnostic Center"}
                         </p>
+                      </div>
+                    )}
+
+                    {/* Confirmed Diagnosis Badge */}
+                    {selected.labConfirmedDiagnosis && (
+                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 mt-2 space-y-1">
+                        <div className="flex items-center gap-1.5 text-emerald-800 text-[10px] font-black uppercase">
+                          <CheckCircle2 size={13} className="text-emerald-700" /> Confirmed Clinical Diagnosis
+                        </div>
+                        <p className="text-xs font-black text-gray-900">{selected.labConfirmedDiagnosis}</p>
+                      </div>
+                    )}
+
+                    {/* View Report Scan Button */}
+                    {selected.labReportUrl && (
+                      <div className="pt-1">
+                        <a
+                          href={selected.labReportUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0d6e7e] hover:bg-[#0a5566] text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+                        >
+                          <ExternalLink size={13} /> View Diagnostic Scan / Report
+                        </a>
                       </div>
                     )}
                   </div>
