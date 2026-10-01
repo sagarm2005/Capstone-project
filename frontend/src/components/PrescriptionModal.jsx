@@ -23,7 +23,8 @@ import {
   Mail,
   MapPin,
   Stethoscope,
-  ChevronDown
+  ChevronDown,
+  FileText
 } from "lucide-react";
 
 export default function PrescriptionModal({
@@ -50,6 +51,7 @@ export default function PrescriptionModal({
   const [errorMsg, setErrorMsg] = useState("");
   const [newAllergyInput, setNewAllergyInput] = useState("");
   const [showAddAllergy, setShowAddAllergy] = useState(false);
+  const [advice, setAdvice] = useState("");
   const [docDetails, setDocDetails] = useState(doctor || null);
   const [openGenericPopupIndex, setOpenGenericPopupIndex] = useState(null);
 
@@ -408,6 +410,8 @@ export default function PrescriptionModal({
         vitals: { bp, sugar, heartRate, weight },
         patientAge: patientData ? calculateAge(patientData.dateOfBirth) : "28",
         bloodGroup: patientData?.bloodGroup || "O+",
+        advice,
+        notes: advice,
         appointmentId
       };
 
@@ -900,11 +904,11 @@ export default function PrescriptionModal({
                           )}
                         </div>
 
-                        {/* Autocomplete Dropdown from Indian Medicine Dataset */}
+                        {/* Autocomplete Dropdown from Formulary */}
                         {med.showSuggestions && med.searchSuggestions?.length > 0 && (
                           <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-30 max-h-56 overflow-y-auto divide-y divide-gray-100">
                             <div className="px-3 py-1.5 bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                              Indian Medicine Dataset (250,000+ Meds)
+                              Hospital Formulary & Available Medicines
                             </div>
                             {med.searchSuggestions.map((sug) => (
                               <button
@@ -975,10 +979,10 @@ export default function PrescriptionModal({
                         />
                       </div>
 
-                      {/* Price from Indian Dataset */}
+                      {/* Price */}
                       <div className="sm:col-span-2">
                         <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                          Dataset Price
+                          Price (₹)
                         </label>
                         <div className="relative">
                           <span className="absolute left-3 top-2 text-sm text-gray-400 font-bold">₹</span>
@@ -1016,7 +1020,7 @@ export default function PrescriptionModal({
                           ))
                         ) : (
                           <span className="text-gray-400 italic">
-                            {med.name ? "Querying HealthPilot.ai..." : "Enter medicine to query active compounds"}
+                            {med.name ? "Verifying active compounds..." : "Enter medicine formulation"}
                           </span>
                         )}
 
@@ -1118,39 +1122,44 @@ export default function PrescriptionModal({
             </div>
           </div>
 
-          {/* Pricing & Total Amount Card at Last */}
-          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-teal-950 text-white rounded-2xl p-5 shadow-lg border border-teal-900/40">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Receipt size={18} className="text-teal-400" />
-                  <span className="text-xs font-bold text-teal-300 uppercase tracking-wider">
-                    Prescription Invoice Preview
-                  </span>
-                </div>
-                <p className="text-xs text-gray-300">
-                  Item prices retrieved live from Indian Medicine Dataset (253,973 verified medicines)
-                </p>
-                <div className="flex items-center gap-3 pt-1 text-xs text-gray-400">
-                  <span>{medicines.filter((m) => m.name.trim()).length} Medicines prescribed</span>
-                  <span>•</span>
-                  <span>Auto-synced to Patient Healthcare Expenses</span>
-                </div>
-              </div>
+          {/* Doctor's Advice & Clinical Instructions */}
+          <div className="bg-slate-50/70 rounded-2xl p-4.5 border border-slate-200">
+            <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <FileText size={14} className="text-[#0d6e7e]" /> Doctor's Advice & Dietary Guidelines
+            </label>
+            <textarea
+              rows={2}
+              value={advice}
+              onChange={(e) => setAdvice(e.target.value)}
+              placeholder="e.g. Drink plenty of warm fluids, avoid oily foods, complete full antibiotic course as prescribed, take medicines after meals."
+              className="w-full px-3.5 py-2 bg-white border border-gray-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0d6e7e] outline-none resize-none leading-relaxed"
+            />
+          </div>
 
-              {/* Total Amount Display */}
-              <div className="text-right sm:border-l sm:border-gray-700 sm:pl-6">
-                <p className="text-[11px] font-bold text-teal-300 uppercase tracking-wider">
-                  Total Prescription Amount
+          {/* Clinical Patient Caution & Doctor's Signature / Seal block */}
+          <div className="pt-3 pb-1 flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-t border-dashed border-gray-300">
+            <div className="text-xs text-gray-500 space-y-1">
+              <p className="font-bold text-gray-700">Patient Cautionary Notice:</p>
+              <p className="text-[11px] text-gray-500 leading-relaxed max-w-md">
+                Please follow exact dosage and duration. In case of unexpected adverse drug reactions, rash, or hypersensitivity, discontinue use immediately and consult the physician or emergency department.
+              </p>
+            </div>
+
+            {/* Doctor Signature & Stamp Area */}
+            <div className="text-right sm:min-w-64 shrink-0">
+              <div className="inline-block text-center border-t border-gray-400 pt-2 px-6">
+                <p className="font-serif italic font-bold text-gray-900 text-sm">
+                  {docDetails?.fullName?.startsWith("Dr.") ? docDetails.fullName : `Dr. ${docDetails?.fullName || "Consulting Physician"}`}
                 </p>
-                <p className="text-3xl font-black text-white tracking-tight mt-0.5">
-                  ₹{totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <p className="text-[11px] text-gray-600 font-semibold">
+                  {docDetails?.degree || "MBBS, MD"} • {docDetails?.specialty || "General Medicine"}
                 </p>
-                {hasAnyAllergyConflict && (
-                  <span className="inline-block mt-1 text-[10px] font-bold bg-red-500/30 text-red-300 px-2 py-0.5 rounded-full border border-red-500/40">
-                    ⚠️ Allergy Conflict Detected
-                  </span>
-                )}
+                <p className="text-[10px] text-gray-400 font-mono">
+                  Reg No: {docDetails?.registrationNumber || "MCI-48291"}
+                </p>
+                <span className="inline-block mt-1 text-[9px] uppercase tracking-wider text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 font-bold">
+                  Authorized Medical Signature
+                </span>
               </div>
             </div>
           </div>
@@ -1161,25 +1170,25 @@ export default function PrescriptionModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-100 transition-colors"
+            className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-100 transition-colors cursor-pointer"
           >
             Cancel
           </button>
 
           <div className="flex items-center gap-3">
             {hasAnyAllergyConflict && (
-              <span className="text-xs font-bold text-red-600 flex items-center gap-1">
-                <AlertTriangle size={14} /> Allergy Warning Active
+              <span className="text-xs font-bold text-amber-700 flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                <AlertTriangle size={14} className="text-amber-600" /> Caution: Allergy Active
               </span>
             )}
             <button
               type="button"
               onClick={handleSave}
               disabled={loading || !selectedPatientId}
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md flex items-center gap-2 ${
+              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer ${
                 hasAnyAllergyConflict
-                  ? "bg-amber-600 hover:bg-amber-700 text-white shadow-amber-900/20"
-                  : "bg-[#0d6e7e] hover:bg-[#0a5566] text-white shadow-teal-900/20"
+                  ? "bg-amber-600 hover:bg-amber-700 text-white"
+                  : "bg-[#0d6e7e] hover:bg-[#0a5566] text-white"
               } disabled:opacity-50`}
             >
               {loading ? (
@@ -1188,7 +1197,7 @@ export default function PrescriptionModal({
                 </>
               ) : (
                 <>
-                  <span>Issue Prescription (Total: ₹{totalAmount.toFixed(2)})</span>
+                  <span>Sign & Issue Prescription</span>
                   <ArrowRight size={16} />
                 </>
               )}
