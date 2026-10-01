@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { Calendar, Plus, Search, X, User, Stethoscope } from "lucide-react";
+import { Calendar, Plus, Search, X, User, Stethoscope, Building2, Eye, Image as ImageIcon } from "lucide-react";
+import PrescriptionModal from "@/components/PrescriptionModal";
+import DoctorPublicProfileModal from "@/components/DoctorPublicProfileModal";
 
 const STATUS_COLORS = {
   confirmed: "bg-green-100 text-green-700",
@@ -18,6 +20,7 @@ export default function Appointments() {
   const [doctors, setDoctors] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
+  const [viewingDoctorProfile, setViewingDoctorProfile] = useState(null);
   const [slots, setSlots] = useState([]);
   const today = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState({ doctorId: 0, date: today, time: "", type: "normal", notes: "" });
@@ -361,41 +364,79 @@ export default function Appointments() {
                     <p className="text-center text-sm text-gray-500 py-6 bg-gray-50 rounded-xl border border-gray-100">No doctors match your search.</p>
                   ) : (
                     filteredDoctors.map((doc) => (
-                      <button key={doc.id} onClick={() => openBooking(doc)}
-                      className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-teal-400 hover:bg-teal-50 transition-colors text-left">
-                      <div className="w-12 h-12 rounded-full bg-[#0d6e7e] flex items-center justify-center shrink-0">
-                        <Stethoscope size={20} className="text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-800 text-sm">{doc.fullName}</p>
-                        <p className="text-xs text-gray-500">{doc.specialty} • {doc.hospital}</p>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className="text-xs text-gray-500">⭐ {doc.rating}</span>
-                          <span className="text-xs text-gray-500">{doc.experience}y exp</span>
+                      <div key={doc.id}
+                        className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-gray-200 hover:border-teal-300 hover:bg-teal-50/40 transition-all bg-white text-left">
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-12 h-12 rounded-2xl bg-[#0d6e7e] flex items-center justify-center shrink-0 shadow-xs">
+                            <Stethoscope size={20} className="text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-900 text-sm truncate">{doc.fullName}</p>
+                            <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                              <span>{doc.specialty}</span>
+                              <span>•</span>
+                              <Building2 size={12} className="text-[#0d6e7e]" />
+                              <span className="font-medium text-gray-700">{doc.hospital || "Hospital"}</span>
+                            </p>
+                            <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500">
+                              <span>⭐ {doc.rating}</span>
+                              <span>•</span>
+                              <span>{doc.experience}y exp</span>
+                              <span>•</span>
+                              <span className="font-bold text-[#0d6e7e]">₹{doc.fee} (Visit)</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewingDoctorProfile(doc);
+                            }}
+                            className="px-3 py-1.5 bg-gray-50 hover:bg-teal-50 text-[#0d6e7e] border border-gray-200 hover:border-teal-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5"
+                            title="View Doctor Bio, Hospital Photos & Service Price List"
+                          >
+                            <Building2 size={13} />
+                            <span>Hospital & Rates</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openBooking(doc)}
+                            className="px-4 py-1.5 bg-[#0d6e7e] hover:bg-[#0a5566] text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
+                          >
+                            Book Slot
+                          </button>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-bold text-gray-800">₹{doc.fee}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${doc.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
-                          {doc.status === "active" ? "Available" : "On Leave"}
-                        </span>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
               </div>
             ) : (
               <form onSubmit={handleBook} className="p-6 space-y-4">
-                <div className="flex items-center gap-3 p-3 bg-teal-50 rounded-lg">
-                  <div className="w-10 h-10 rounded-full bg-[#0d6e7e] flex items-center justify-center shrink-0">
-                    <User size={16} className="text-white" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-teal-50 rounded-xl border border-teal-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#0d6e7e] flex items-center justify-center shrink-0">
+                      <User size={16} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-800 text-sm">{selectedDoctor.fullName}</p>
+                      <p className="text-xs text-gray-500">{selectedDoctor.specialty} • ₹{selectedDoctor.fee} visiting fee</p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800 text-sm">{selectedDoctor.fullName}</p>
-                    <p className="text-xs text-gray-500">{selectedDoctor.specialty} • ₹{selectedDoctor.fee}</p>
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setViewingDoctorProfile(selectedDoctor)}
+                      className="px-2.5 py-1 bg-white text-[#0d6e7e] border border-teal-200 rounded-lg text-xs font-bold hover:bg-teal-100/50 transition-colors flex items-center gap-1 shadow-xs"
+                    >
+                      <Building2 size={12} /> Hospital & Rates
+                    </button>
+                    <button type="button" onClick={() => setSelectedDoctor(null)} className="text-xs text-teal-700 hover:underline font-medium px-2 py-1">Change</button>
                   </div>
-                  <button type="button" onClick={() => setSelectedDoctor(null)} className="ml-auto text-xs text-teal-600 hover:underline">Change</button>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
@@ -447,176 +488,30 @@ export default function Appointments() {
       )}
 
       {showRxModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
-              <div>
-                <h2 className="text-lg font-bold text-gray-800">{isRxEditing ? "Update Prescription" : "Add Prescription"}</h2>
-                <p className="text-xs text-gray-500">For {selectedAppt?.patientName}</p>
-                {isRxEditing && <p className="text-[11px] text-teal-600 mt-1">Editing existing prescription from this appointment.</p>}
-              </div>
-              <button onClick={() => setShowRxModal(false)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                <X size={20} className="text-gray-400" />
-              </button>
-            </div>
-            <form onSubmit={handleSaveRx} className="p-6 space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-3xl border border-gray-100 bg-slate-50 p-4">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 mb-3">Doctor</p>
-                  <p className="text-sm font-semibold text-gray-900">{doctorInfo?.fullName || user?.fullName || selectedAppt?.doctorName}</p>
-                  <p className="text-xs text-gray-500 mt-1">{doctorInfo?.specialty || "Physician"}</p>
-                  <p className="text-xs text-gray-500">{doctorInfo?.hospital || "MediCore Hospital"}</p>
-                  {doctorInfo?.location && <p className="text-xs text-gray-500">{doctorInfo.location}</p>}
-                </div>
-                <div className="rounded-3xl border border-gray-100 bg-white p-4">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 mb-3">Patient Details</p>
-                  <p className="text-sm font-semibold text-gray-900">{selectedAppt?.patientName}</p>
-                  <div className="grid grid-cols-3 gap-3 text-xs text-gray-500 mt-3">
-                    <div>
-                      <p>Age</p>
-                      <p className="font-semibold text-gray-900">{rxForm.patientAge || "—"}</p>
-                    </div>
-                    <div>
-                      <p>Blood Group</p>
-                      <p className="font-semibold text-gray-900">{rxForm.bloodGroup || "—"}</p>
-                    </div>
-                    <div>
-                      <p>Appointment</p>
-                      <p className="font-semibold text-gray-900">{selectedAppt?.date}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Diagnosed Disease & Priority</label>
-                <div className="grid grid-cols-3 gap-3">
-                  <input value={rxForm.diagnosis} onChange={(e) => setRxForm({ ...rxForm, diagnosis: e.target.value })} required
-                    className="col-span-2 px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-medium"
-                    placeholder="Primary medical diagnosis..." />
-                  <select value={rxForm.severity} onChange={(e) => setRxForm({ ...rxForm, severity: e.target.value })}
-                    className="px-3 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium">
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                </div>
-              </div>
+        <PrescriptionModal
+          isOpen={showRxModal}
+          onClose={() => setShowRxModal(false)}
+          initialPatientId={selectedAppt?.patientId}
+          initialPatientName={selectedAppt?.patientName}
+          appointmentId={selectedAppt?.id}
+          doctor={user}
+          onPrescriptionCreated={() => {
+            fetchAppointments();
+            setShowRxModal(false);
+          }}
+        />
+      )}
 
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Patient Vitals</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-gray-400 font-bold ml-1">BP (min/max)</span>
-                    <input placeholder="120/80" value={rxForm.bp} onChange={(e) => setRxForm({ ...rxForm, bp: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:bg-white bg-gray-50 focus:ring-2 focus:ring-teal-500 font-medium" />
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-gray-400 font-bold ml-1">Sugar (mg/dL)</span>
-                    <input placeholder="95" value={rxForm.sugar} onChange={(e) => setRxForm({ ...rxForm, sugar: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:bg-white bg-gray-50 focus:ring-2 focus:ring-teal-500 font-medium" />
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-gray-400 font-bold ml-1">Heart (bpm)</span>
-                    <input placeholder="72" value={rxForm.heartRate} onChange={(e) => setRxForm({ ...rxForm, heartRate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:bg-white bg-gray-50 focus:ring-2 focus:ring-teal-500 font-medium" />
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-gray-400 font-bold ml-1">Weight (kg)</span>
-                    <input placeholder="70" value={rxForm.weight} onChange={(e) => setRxForm({ ...rxForm, weight: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:bg-white bg-gray-50 focus:ring-2 focus:ring-teal-500 font-medium" />
-                  </div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Medicines</label>
-                  <button type="button" onClick={addMed} className="text-xs font-bold text-[#0d6e7e] hover:underline flex items-center gap-1">
-                    <Plus size={14} /> Add Drug
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {rxForm.medicines.map((med, i) => (
-                    <div key={i} className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <input placeholder="Drug name" value={med.name} onChange={(e) => updateRxMed(i, "name", e.target.value)} required
-                          className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium" />
-                        <input placeholder="Dosage (e.g. 500mg)" value={med.dosage} onChange={(e) => updateRxMed(i, "dosage", e.target.value)} required
-                          className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <input placeholder="Frequency (e.g. 1-0-1)" value={med.frequency} onChange={(e) => updateRxMed(i, "frequency", e.target.value)} required
-                          className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium" />
-                        <input placeholder="Duration (e.g. 5 days)" value={med.duration} onChange={(e) => updateRxMed(i, "duration", e.target.value)} required
-                          className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Select Lab for Tests</label>
-                  <select value={rxForm.labId} onChange={(e) => setRxForm({ ...rxForm, labId: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium">
-                    <option value="">No lab test required</option>
-                    {labsList.map(lab => (
-                      <option key={lab.id} value={lab.id}>{lab.labName || lab.fullName}</option>
-                    ))}
-                  </select>
-                  <input value={rxForm.labTests} onChange={(e) => setRxForm({ ...rxForm, labTests: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
-                    placeholder="Specify tests (e.g. CBC, Lipid)" 
-                    disabled={!rxForm.labId} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Follow-up & Date</label>
-                  <input type="date" value={rxForm.followupDate} onChange={(e) => setRxForm({ ...rxForm, followupDate: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium" />
-                  <button type="button" onClick={handleSendLabRequest}
-                    className="mt-3 w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-60 transition-all"
-                    disabled={labRequestLoading || !rxForm.labId || !rxForm.labTests || loading}>
-                    {labRequestLoading ? "Sending lab request..." : "Send Lab Request"}
-                  </button>
-                  {labRequestMessage && (
-                    <p className="text-xs text-gray-600 mt-2">{labRequestMessage}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button type="button" onClick={handleValidateRx} disabled={validating || loading}
-                    className="w-full py-3 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 disabled:opacity-60 transition-all">
-                    {validating ? "Validating with AI..." : "Validate with AI"}
-                  </button>
-                  <button type="button" onClick={handleViewLabReports}
-                    className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all">
-                    View Lab Reports
-                  </button>
-                </div>
-                {validationResult?.length > 0 && (
-                  <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm text-gray-800">
-                    <p className="font-semibold text-teal-700 mb-2">AI Validation Feedback</p>
-                    <ul className="space-y-2">
-                      {validationResult.map((item, index) => (
-                        <li key={index} className={`${item.type === "error" ? "text-red-700" : item.type === "warning" ? "text-amber-700" : "text-teal-700"}`}>
-                          {item.message}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              <button type="submit" disabled={loading}
-                className="w-full py-4 bg-[#0d6e7e] text-white rounded-xl font-bold text-sm hover:bg-[#0a5566] disabled:opacity-60 shadow-lg shadow-teal-900/10 transition-all transform hover:-translate-y-0.5 active:translate-y-0">
-                {loading ? "Saving Prescription..." : isRxEditing ? "Update Prescription" : "Confirm & Save Prescription"}
-              </button>
-            </form>
-          </div>
-        </div>
+      {viewingDoctorProfile && (
+        <DoctorPublicProfileModal
+          isOpen={Boolean(viewingDoctorProfile)}
+          onClose={() => setViewingDoctorProfile(null)}
+          doctor={viewingDoctorProfile}
+          onBook={(doc) => {
+            setViewingDoctorProfile(null);
+            openBooking(doc);
+          }}
+        />
       )}
     </div>
   );
