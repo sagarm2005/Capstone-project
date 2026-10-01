@@ -1279,7 +1279,7 @@ def patient_detail(patient_id):
     res = serialize(patient)
     user_info = db.users.find_one({"id": patient_id})
     if user_info:
-        for k in ["fullName", "email", "phone"]:
+        for k in ["fullName", "email", "phone", "dateOfBirth", "gender", "bloodGroup", "address"]:
             if not res.get(k) and user_info.get(k):
                 res[k] = user_info.get(k)
     return jsonify(res)

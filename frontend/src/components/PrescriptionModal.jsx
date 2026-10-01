@@ -17,7 +17,13 @@ import {
   Activity,
   Receipt,
   ArrowRight,
-  TrendingDown
+  TrendingDown,
+  Building2,
+  Phone,
+  Mail,
+  MapPin,
+  Stethoscope,
+  ChevronDown
 } from "lucide-react";
 
 export default function PrescriptionModal({
@@ -44,6 +50,34 @@ export default function PrescriptionModal({
   const [errorMsg, setErrorMsg] = useState("");
   const [newAllergyInput, setNewAllergyInput] = useState("");
   const [showAddAllergy, setShowAddAllergy] = useState(false);
+  const [docDetails, setDocDetails] = useState(doctor || null);
+  const [openGenericPopupIndex, setOpenGenericPopupIndex] = useState(null);
+
+  // Fetch full doctor profile details for real clinical header
+  useEffect(() => {
+    if (doctor?.id) {
+      api.get(`/doctors/${doctor.id}`)
+        .then((res) => {
+          if (res) setDocDetails(res);
+        })
+        .catch(() => {
+          setDocDetails(doctor);
+        });
+    } else if (doctor) {
+      setDocDetails(doctor);
+    }
+  }, [doctor, isOpen]);
+
+  // Close generic popover on global click
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setOpenGenericPopupIndex(null);
+    };
+    if (openGenericPopupIndex !== null) {
+      window.addEventListener("click", handleGlobalClick);
+      return () => window.removeEventListener("click", handleGlobalClick);
+    }
+  }, [openGenericPopupIndex]);
 
   // Medicines state
   const [medicines, setMedicines] = useState([
@@ -409,29 +443,94 @@ export default function PrescriptionModal({
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
       <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-gray-100 my-auto animate-in fade-in zoom-in-95 duration-200">
         
-        {/* Modal Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-teal-800 via-[#0d6e7e] to-teal-700 text-white flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-white/15 flex items-center justify-center backdrop-blur-md">
-              <Pill size={22} className="text-teal-200" />
+        {/* Real-time Hospital & Doctor Prescription Pad Header */}
+        <div className="bg-white border-b border-gray-200 relative">
+          {/* Top Medical Accent Stripe */}
+          <div className="h-1.5 bg-gradient-to-r from-teal-800 via-[#0d6e7e] to-teal-600" />
+          
+          <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Hospital & Doctor Details */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-200 text-[#0d6e7e] flex items-center justify-center shrink-0 shadow-xs">
+                <Building2 size={24} />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-black text-gray-900 tracking-tight uppercase">
+                    {docDetails?.hospital || "MediCore Super Specialty Hospital"}
+                  </h2>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-teal-50 text-[#0d6e7e] border border-teal-200 rounded-full">
+                    OPD Prescription Slip
+                  </span>
+                </div>
+                
+                {/* Hospital Address & Contact Details */}
+                <div className="text-xs text-gray-500 flex items-center gap-x-3 gap-y-1 flex-wrap">
+                  <span className="flex items-center gap-1">
+                    <MapPin size={12} className="text-[#0d6e7e] shrink-0" />
+                    {docDetails?.hospitalAddress || "123 Healthcare Way, Medical District, Metro City 560001"}
+                  </span>
+                  {(docDetails?.hospitalPhone || docDetails?.phone) && (
+                    <span className="flex items-center gap-1">
+                      <Phone size={12} className="text-[#0d6e7e] shrink-0" />
+                      {docDetails?.hospitalPhone || docDetails?.phone}
+                    </span>
+                  )}
+                  {(docDetails?.hospitalEmail || docDetails?.email) && (
+                    <span className="flex items-center gap-1">
+                      <Mail size={12} className="text-[#0d6e7e] shrink-0" />
+                      {docDetails?.hospitalEmail || docDetails?.email}
+                    </span>
+                  )}
+                </div>
+
+                {/* Doctor Details */}
+                <div className="pt-1 flex items-center gap-2 flex-wrap text-xs text-gray-700">
+                  <span className="font-bold text-gray-900 flex items-center gap-1">
+                    <Stethoscope size={13} className="text-[#0d6e7e]" />
+                    {docDetails?.fullName?.startsWith("Dr.") ? docDetails.fullName : `Dr. ${docDetails?.fullName || "Consulting Physician"}`}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-gray-600 font-medium">
+                    {docDetails?.degree || "MBBS, MD"} ({docDetails?.specialty || "General Medicine"})
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-[11px] font-semibold text-gray-500 font-mono">
+                    Reg No: {docDetails?.registrationNumber || "MCI-48291"}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">Doctor Prescription Console</h2>
-              <p className="text-xs text-teal-100 font-medium">
-                AI Active Compounds & Allergy Safety · HealthPilot.ai & Indian Medicine Dataset Live Pricing
-              </p>
+
+            {/* Date, Prescription Reference & Close Button */}
+            <div className="flex sm:flex-col items-end justify-between sm:justify-start gap-2.5 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Date</span>
+                  <span className="text-xs font-bold text-gray-800">
+                    {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Rx Reference</span>
+                <span className="text-xs font-mono font-bold text-[#0d6e7e] bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                  RX-{new Date().getFullYear()}-{appointmentId ? String(appointmentId).padStart(4, "0") : String(selectedPatientId || 101).padStart(4, "0")}
+                </span>
+              </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-          >
-            <X size={20} />
-          </button>
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6">
+        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-5">
           
           {errorMsg && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700 text-sm">
@@ -440,20 +539,28 @@ export default function PrescriptionModal({
             </div>
           )}
 
-          {/* Patient Selection & Allergy Summary Bar */}
-          <div className="bg-gray-50/80 rounded-2xl p-5 border border-gray-200/80 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <User size={13} className="text-[#0d6e7e]" /> Patient Name *
-                </label>
+          {/* Patient Information & Demographics (Real-time clinical card) */}
+          <div className="bg-slate-50/80 rounded-2xl p-4.5 border border-slate-200 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2.5 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-teal-100/70 text-[#0d6e7e] flex items-center justify-center">
+                  <User size={15} />
+                </div>
+                <span className="text-xs font-black uppercase tracking-wider text-gray-700">
+                  Patient Demographics & Clinical Records
+                </span>
+              </div>
+
+              {/* Patient Selection Dropdown */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-bold text-gray-600 shrink-0">Select Patient:</label>
                 <select
                   value={selectedPatientId}
                   onChange={handlePatientSelect}
                   required
-                  className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+                  className="px-3 py-1.5 bg-white border border-gray-300 rounded-xl text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-[#0d6e7e] outline-none"
                 >
-                  <option value={0}>Select patient from registry...</option>
+                  <option value={0}>Choose registered patient...</option>
                   {patients.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.fullName} (ID #{p.id}) {p.allergies?.length ? `— [${p.allergies.length} Allergies]` : ""}
@@ -461,36 +568,54 @@ export default function PrescriptionModal({
                   ))}
                 </select>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Age & Blood Group
-                </label>
-                <div className="px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">
-                  {patientData
-                    ? `${calculateAge(patientData.dateOfBirth) || "—"} yrs · Blood: ${patientData.bloodGroup || "N/A"}`
-                    : "Select patient to view vitals"}
-                </div>
+            {/* Demographics Columns: Name, Age, Gender, Blood Group, Severity */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Patient Name</span>
+                <p className="font-bold text-gray-900 text-sm truncate mt-0.5">
+                  {patientData?.fullName || (selectedPatientId ? `Patient #${selectedPatientId}` : "—")}
+                </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Severity Level
-                </label>
-                <div className="flex gap-2">
+              <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Age</span>
+                <p className="font-bold text-gray-900 text-sm mt-0.5">
+                  {calculateAge(patientData?.dateOfBirth) ? `${calculateAge(patientData.dateOfBirth)} Yrs` : (patientData?.age ? `${patientData.age} Yrs` : "—")}
+                </p>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Gender</span>
+                <p className="font-bold text-gray-900 text-sm mt-0.5 capitalize">
+                  {patientData?.gender || "—"}
+                </p>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Blood Group</span>
+                <p className="font-bold text-[#0d6e7e] text-sm mt-0.5">
+                  {patientData?.bloodGroup || "—"}
+                </p>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Severity Priority</span>
+                <div className="flex gap-1 mt-1">
                   {["Low", "Medium", "High"].map((lvl) => (
                     <button
                       type="button"
                       key={lvl}
                       onClick={() => setSeverity(lvl)}
-                      className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all ${
+                      className={`flex-1 py-0.5 text-[10px] font-bold rounded transition-colors ${
                         severity === lvl
                           ? lvl === "High"
-                            ? "bg-red-600 text-white border-red-600 shadow-sm"
+                            ? "bg-red-600 text-white"
                             : lvl === "Medium"
-                            ? "bg-amber-500 text-white border-amber-500 shadow-sm"
-                            : "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-100"
+                            ? "bg-amber-500 text-white"
+                            : "bg-emerald-600 text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
                     >
                       {lvl}
@@ -500,50 +625,48 @@ export default function PrescriptionModal({
               </div>
             </div>
 
-            {/* Patient Allergies Banner */}
-            <div className="pt-2 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3">
+            {/* Documented Allergies Warning Strip */}
+            <div className="pt-2 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black text-gray-700 flex items-center gap-1.5">
-                  <ShieldAlert size={14} className="text-red-500" /> Pre-given Patient Allergies:
+                <span className="font-bold text-amber-800 flex items-center gap-1">
+                  <ShieldAlert size={14} className="text-amber-600" /> Patient Allergies:
                 </span>
                 {patientData?.allergies?.length > 0 ? (
                   patientData.allergies.map((a, idx) => (
                     <span
                       key={idx}
-                      className="px-2.5 py-1 bg-red-100 text-red-800 border border-red-200 rounded-lg text-xs font-bold shadow-xs flex items-center gap-1"
+                      className="px-2.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold"
                     >
                       ⚠️ {a}
                     </span>
                   ))
                 ) : (
-                  <span className="text-xs text-gray-400 italic font-medium">
-                    No documented drug allergies on record.
-                  </span>
+                  <span className="text-gray-400 italic">No documented drug allergies on record.</span>
                 )}
               </div>
 
               {selectedPatientId > 0 && (
-                <div className="flex items-center gap-2">
+                <div>
                   {showAddAllergy ? (
                     <div className="flex items-center gap-1.5">
                       <input
                         type="text"
-                        placeholder="e.g. Penicillin, Aspirin"
+                        placeholder="e.g. Penicillin"
                         value={newAllergyInput}
                         onChange={(e) => setNewAllergyInput(e.target.value)}
-                        className="px-2.5 py-1 text-xs border border-gray-300 rounded-lg focus:ring-1 focus:ring-teal-500 outline-none w-44"
+                        className="px-2 py-1 text-xs border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#0d6e7e] outline-none w-36"
                       />
                       <button
                         type="button"
                         onClick={addAllergyToPatient}
-                        className="px-2.5 py-1 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700"
+                        className="px-2 py-1 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700"
                       >
                         Save
                       </button>
                       <button
                         type="button"
                         onClick={() => setShowAddAllergy(false)}
-                        className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                        className="px-1.5 py-1 text-xs text-gray-500 hover:text-gray-700"
                       >
                         Cancel
                       </button>
@@ -552,7 +675,7 @@ export default function PrescriptionModal({
                     <button
                       type="button"
                       onClick={() => setShowAddAllergy(true)}
-                      className="text-xs text-red-600 hover:text-red-700 font-bold underline flex items-center gap-1"
+                      className="text-xs text-amber-800 hover:underline font-bold"
                     >
                       + Add Known Allergy
                     </button>
@@ -594,12 +717,15 @@ export default function PrescriptionModal({
           {/* Medicines Prescription Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b pb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center text-[#0d6e7e]">
-                  <Pill size={16} />
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl font-serif font-black italic text-[#0d6e7e] leading-none select-none">
+                  ℞
+                </span>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base leading-tight">Prescribed Medications</h3>
+                  <p className="text-[11px] text-gray-400">Dosage, frequency, duration & active compounds</p>
                 </div>
-                <h3 className="font-bold text-gray-900 text-base">Prescribed Medicines</h3>
-                <span className="text-xs bg-teal-100 text-teal-800 font-bold px-2 py-0.5 rounded-full">
+                <span className="text-xs bg-teal-50 text-[#0d6e7e] border border-teal-200 font-bold px-2 py-0.5 rounded-full ml-1">
                   {medicines.length} Item(s)
                 </span>
               </div>
@@ -654,9 +780,93 @@ export default function PrescriptionModal({
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
                       {/* Medicine Name with Autocomplete */}
                       <div className="sm:col-span-4 relative">
-                        <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                          Medicine / Brand Name *
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                            Medicine / Brand Name *
+                          </label>
+
+                          {/* Small Generic Pop-up Trigger Directly Over Prescribed Medicine */}
+                          {!isConflict && med.genericInfo?.available && (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenGenericPopupIndex(openGenericPopupIndex === idx ? null : idx);
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-md text-[10px] font-bold transition-all shadow-2xs cursor-pointer"
+                                title="Generic medicine alternative available"
+                              >
+                                <Sparkles size={11} className="text-emerald-600 shrink-0" />
+                                <span>Generic: ₹{med.genericInfo.price}</span>
+                                {med.price > med.genericInfo.price && (
+                                  <span className="bg-emerald-200/80 text-emerald-900 px-1 rounded font-black">
+                                    -₹{(med.price - med.genericInfo.price).toFixed(0)}
+                                  </span>
+                                )}
+                                <ChevronDown size={11} className={`transition-transform duration-150 ${openGenericPopupIndex === idx ? "rotate-180" : ""}`} />
+                              </button>
+
+                              {/* Small Popover Floating Over The Prescribed Medicine */}
+                              {openGenericPopupIndex === idx && (
+                                <div
+                                  className="absolute right-0 top-full mt-1.5 z-40 bg-white border border-emerald-300 shadow-2xl rounded-2xl p-3.5 w-72 text-left animate-in fade-in zoom-in-95 duration-150 ring-4 ring-emerald-500/10"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-gray-100">
+                                    <div className="flex items-center gap-1.5">
+                                      <Sparkles size={13} className="text-emerald-600" />
+                                      <span className="text-xs font-bold text-gray-900">Generic Alternative Available</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setOpenGenericPopupIndex(null)}
+                                      className="text-gray-400 hover:text-gray-600 p-0.5 rounded-md hover:bg-gray-100"
+                                    >
+                                      <X size={13} />
+                                    </button>
+                                  </div>
+
+                                  <p className="text-xs font-bold text-gray-900 line-clamp-2">
+                                    {med.genericInfo.genericName}
+                                  </p>
+
+                                  <div className="mt-1 mb-2.5 text-[11px] text-emerald-700 flex items-center justify-between">
+                                    <span>Generic Price: <strong className="text-gray-900 font-black">₹{med.genericInfo.price}</strong></span>
+                                    {med.price > med.genericInfo.price && (
+                                      <span className="font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">
+                                        Saves ₹{(med.price - med.genericInfo.price).toFixed(2)}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        applyGenericMedicine(idx);
+                                        setOpenGenericPopupIndex(null);
+                                      }}
+                                      className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1"
+                                    >
+                                      <RefreshCw size={11} /> Switch to Generic
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        addGenericAsNewRow(idx);
+                                        setOpenGenericPopupIndex(null);
+                                      }}
+                                      className="px-2.5 py-1.5 bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold transition-all"
+                                    >
+                                      + Add
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                         <div className="relative">
                           <input
                             type="text"
@@ -850,48 +1060,7 @@ export default function PrescriptionModal({
                       </div>
                     </div>
 
-                    {/* Generic Medicine Available Section: shown if NO allergy conflict and generic is present */}
-                    {!isConflict && med.genericInfo?.available && (
-                      <div className="mt-3 p-3 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-xl border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <Sparkles size={14} className="text-emerald-600" />
-                            <span className="text-xs font-black text-emerald-900 uppercase tracking-wide">
-                              Generic Alternative Available:
-                            </span>
-                            <span className="text-xs font-bold text-gray-900">
-                              {med.genericInfo.genericName}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-emerald-700 flex items-center gap-1.5">
-                            <TrendingDown size={13} />
-                            Generic Price: <span className="font-black text-gray-900">₹{med.genericInfo.price}</span>{" "}
-                            {med.price > med.genericInfo.price && (
-                              <span className="text-emerald-800 font-bold bg-emerald-100/80 px-1.5 py-0.5 rounded">
-                                (Patient saves ₹{(med.price - med.genericInfo.price).toFixed(2)})
-                              </span>
-                            )}
-                          </p>
-                        </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => applyGenericMedicine(idx)}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1"
-                          >
-                            <RefreshCw size={12} /> Switch to Generic
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => addGenericAsNewRow(idx)}
-                            className="px-2.5 py-1.5 bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold transition-all"
-                          >
-                            + Add Generic
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
