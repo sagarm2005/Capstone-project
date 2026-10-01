@@ -293,13 +293,13 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
             onClick={() => setActiveTab("bloodGroupNetwork")}
             className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
               activeTab === "bloodGroupNetwork"
-                ? "border-red-600 text-red-600 bg-red-50/30 rounded-t-lg"
-                : "border-transparent text-gray-500 hover:text-red-600"
+                ? "border-[#0d6e7e] text-[#0d6e7e] bg-teal-50/40 rounded-t-lg"
+                : "border-transparent text-gray-500 hover:text-[#0d6e7e]"
             }`}
           >
-            <Droplet size={14} className="text-red-500" />
+            <Droplet size={14} className="text-[#0d6e7e]" />
             <span>Same Blood Group Network (2)</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-red-100 text-red-700 font-extrabold">
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-teal-100 text-[#0d6e7e] font-extrabold">
               {bloodGroup}
             </span>
           </button>
@@ -333,7 +333,7 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
-                    <Droplet size={13} className="text-red-500" /> Blood Group
+                    <Droplet size={13} className="text-[#0d6e7e]" /> Blood Group
                   </label>
                   <select
                     value={bloodGroup}
@@ -599,25 +599,25 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
               </div>
 
               {/* Known Drug Allergies */}
-              <div className="bg-red-50/40 border border-red-200/70 rounded-2xl p-4 space-y-3">
+              <div className="bg-amber-50/30 border border-amber-200/60 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-red-900 flex items-center gap-1.5">
-                    <AlertCircle size={14} className="text-red-600" /> Known Drug Allergies (Safety Alert)
+                  <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                    <AlertCircle size={14} className="text-amber-600" /> Known Drug Allergies (Safety Alert)
                   </label>
-                  <span className="text-[10px] text-red-400 font-medium">Used in drug interaction checks</span>
+                  <span className="text-[10px] text-amber-600/70 font-medium">Used in drug interaction checks</span>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5 min-h-[28px]">
                   {allergies.map((a, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-red-300 text-red-700 rounded-xl text-xs font-bold shadow-xs uppercase tracking-wider"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-amber-300 text-amber-800 rounded-xl text-xs font-bold shadow-xs uppercase tracking-wider"
                     >
                       {a}
                       <button
                         type="button"
                         onClick={() => removeAllergy(idx)}
-                        className="hover:text-red-900 p-0.5 rounded-full"
+                        className="hover:text-amber-950 p-0.5 rounded-full"
                       >
                         <X size={12} />
                       </button>
@@ -640,12 +640,12 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                       }
                     }}
                     placeholder="e.g. Penicillin, Sulfa, Aspirin"
-                    className="flex-1 px-3 py-2 bg-white border border-red-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 outline-none"
+                    className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                   <button
                     type="button"
                     onClick={addAllergy}
-                    className="px-3.5 py-2 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-all flex items-center gap-1"
+                    className="px-3.5 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-all flex items-center gap-1"
                   >
                     <Plus size={14} /> Add
                   </button>
@@ -658,37 +658,37 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
           {activeTab === "bloodGroupNetwork" && (
             <div className="space-y-5 animate-in fade-in-50 duration-150">
               {/* Highlight Banner */}
-              <div className="bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-2xl p-4 shadow-md flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
-                  <Droplet size={20} className="fill-white" />
+              <div className="bg-gradient-to-r from-[#0d6e7e] to-[#0a5566] text-white rounded-2xl p-4 shadow-sm flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0">
+                  <Users size={20} className="text-white" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-extrabold text-sm tracking-wide">
                       Same Blood Group Emergency Network
                     </h3>
-                    <span className="px-2 py-0.5 bg-white text-red-700 rounded-full text-[10px] font-black uppercase">
+                    <span className="px-2.5 py-0.5 bg-white/20 text-white border border-white/30 rounded-full text-[10px] font-black uppercase">
                       Blood Group: {bloodGroup}
                     </span>
                   </div>
-                  <p className="text-xs text-rose-100 mt-1 leading-relaxed">
-                    Provide details of <strong>two trusted persons who have your exact blood group ({bloodGroup})</strong>. In medical emergencies or rapid blood transfusion needs, hospital staff can directly contact them.
+                  <p className="text-xs text-teal-100 mt-1 leading-relaxed">
+                    Provide details of <strong>two trusted persons who have your exact blood group ({bloodGroup})</strong> for urgent blood requirements or emergency hospital verification.
                   </p>
                 </div>
               </div>
 
               {/* Contact #1 */}
-              <div className="border border-red-100 bg-red-50/20 rounded-2xl p-5 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-red-100">
+              <div className="border border-gray-200 bg-gray-50/50 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-200/80">
                   <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center">
+                    <span className="w-6 h-6 rounded-full bg-[#0d6e7e] text-white text-xs font-bold flex items-center justify-center">
                       1
                     </span>
                     <span className="text-xs font-bold text-gray-900">
                       Emergency Donor Contact #1
                     </span>
                   </div>
-                  <span className="text-[11px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
+                  <span className="text-[11px] font-bold text-[#0d6e7e] bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
                     Matches Blood Group: {bloodGroup}
                   </span>
                 </div>
@@ -703,7 +703,7 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                       value={contact1.name}
                       onChange={(e) => setContact1({ ...contact1, name: e.target.value })}
                       placeholder="e.g. Ramesh Sharma"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all"
                     />
                   </div>
 
@@ -716,7 +716,7 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                       value={contact1.phone}
                       onChange={(e) => setContact1({ ...contact1, phone: e.target.value })}
                       placeholder="+91 98220 11223"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -724,14 +724,14 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="sm:col-span-2">
                     <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
-                      <MapPin size={11} className="text-red-500" /> Residential / Work Address *
+                      <MapPin size={11} className="text-[#0d6e7e]" /> Residential / Work Address *
                     </label>
                     <input
                       type="text"
                       value={contact1.address}
                       onChange={(e) => setContact1({ ...contact1, address: e.target.value })}
                       placeholder="e.g. Flat 304, Green Heights, Jayanagar, Bengaluru"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all"
                     />
                   </div>
 
@@ -744,24 +744,24 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                       value={contact1.relationship}
                       onChange={(e) => setContact1({ ...contact1, relationship: e.target.value })}
                       placeholder="e.g. Brother / Friend"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Contact #2 */}
-              <div className="border border-red-100 bg-red-50/20 rounded-2xl p-5 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-red-100">
+              <div className="border border-gray-200 bg-gray-50/50 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-200/80">
                   <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center">
+                    <span className="w-6 h-6 rounded-full bg-[#0d6e7e] text-white text-xs font-bold flex items-center justify-center">
                       2
                     </span>
                     <span className="text-xs font-bold text-gray-900">
                       Emergency Donor Contact #2
                     </span>
                   </div>
-                  <span className="text-[11px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
+                  <span className="text-[11px] font-bold text-[#0d6e7e] bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
                     Matches Blood Group: {bloodGroup}
                   </span>
                 </div>
@@ -776,7 +776,7 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                       value={contact2.name}
                       onChange={(e) => setContact2({ ...contact2, name: e.target.value })}
                       placeholder="e.g. Priya Deshmukh"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all"
                     />
                   </div>
 
@@ -789,7 +789,7 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                       value={contact2.phone}
                       onChange={(e) => setContact2({ ...contact2, phone: e.target.value })}
                       placeholder="+91 97654 33221"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -797,14 +797,14 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="sm:col-span-2">
                     <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
-                      <MapPin size={11} className="text-red-500" /> Residential / Work Address *
+                      <MapPin size={11} className="text-[#0d6e7e]" /> Residential / Work Address *
                     </label>
                     <input
                       type="text"
                       value={contact2.address}
                       onChange={(e) => setContact2({ ...contact2, address: e.target.value })}
                       placeholder="e.g. 12B, Lakeview Enclave, HSR Layout, Bengaluru"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all"
                     />
                   </div>
 
@@ -817,7 +817,7 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                       value={contact2.relationship}
                       onChange={(e) => setContact2({ ...contact2, relationship: e.target.value })}
                       placeholder="e.g. Colleague / Cousin"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all"
                     />
                   </div>
                 </div>

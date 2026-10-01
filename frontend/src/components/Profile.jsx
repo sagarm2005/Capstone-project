@@ -158,7 +158,7 @@ export default function Profile() {
             <>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                  <Droplet size={18} className="text-red-500" /> Medical & Health Profile
+                  <Droplet size={18} className="text-[#0d6e7e]" /> Medical & Health Profile
                 </h2>
                 <button
                   onClick={() => setShowPatientModal(true)}
@@ -170,7 +170,7 @@ export default function Profile() {
               <div className="space-y-3.5 text-xs">
                 <div className="flex justify-between py-2 border-b border-gray-50">
                   <span className="text-gray-500">Blood Group</span>
-                  <span className="font-black text-red-600 px-2 py-0.5 bg-red-50 border border-red-200 rounded-md">{profile.bloodGroup || "Not specified"}</span>
+                  <span className="font-bold text-[#0d6e7e] px-2.5 py-0.5 bg-teal-50 border border-teal-200 rounded-md">{profile.bloodGroup || "Not specified"}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-gray-50">
                   <span className="text-gray-500">Date of Birth</span>
@@ -233,13 +233,13 @@ export default function Profile() {
 
                 {/* Known Allergies */}
                 <div>
-                  <span className="text-gray-500 block mb-1.5 font-medium flex items-center gap-1 text-red-600">
-                    <AlertTriangle size={12} className="text-red-500" /> Known Allergies
+                  <span className="text-gray-500 block mb-1.5 font-medium flex items-center gap-1 text-amber-700">
+                    <AlertTriangle size={12} className="text-amber-600" /> Known Allergies
                   </span>
                   <div className="flex flex-wrap gap-2">
                     {profile.allergies?.length ? (
                       profile.allergies.map(a => (
-                        <span key={a} className="bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase">
+                        <span key={a} className="bg-amber-50/70 text-amber-800 border border-amber-200/80 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase">
                           {a}
                         </span>
                       ))
@@ -294,18 +294,18 @@ export default function Profile() {
 
       {/* PATIENT-SPECIFIC: Emergency Same Blood Group Donor Network */}
       {role === "patient" && (
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-red-100 space-y-5">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-                <Droplet size={24} className="fill-red-600" />
+              <div className="w-12 h-12 rounded-2xl bg-teal-50 text-[#0d6e7e] flex items-center justify-center shrink-0">
+                <Users size={22} className="text-[#0d6e7e]" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-bold text-gray-900">
                     Same Blood Group Emergency Network
                   </h3>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-red-100 text-red-700 border border-red-200">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-50 text-[#0d6e7e] border border-teal-200">
                     Blood Group: {profile.bloodGroup || "O+"}
                   </span>
                 </div>
@@ -316,7 +316,7 @@ export default function Profile() {
             </div>
             <button
               onClick={() => setShowPatientModal(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-bold border border-red-200 transition-colors self-start sm:self-auto cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-50 hover:bg-teal-100 text-[#0d6e7e] rounded-xl text-xs font-bold border border-teal-200 transition-colors self-start sm:self-auto cursor-pointer"
             >
               <Edit3 size={13} /> Update Emergency Donors
             </button>
@@ -332,20 +332,20 @@ export default function Profile() {
                   key={idx}
                   className={`rounded-2xl p-5 border transition-all ${
                     hasData
-                      ? "bg-gradient-to-br from-red-50/30 via-white to-white border-red-100 shadow-xs"
-                      : "bg-gray-50/70 border-dashed border-gray-200 text-center"
+                      ? "bg-gray-50/50 border-gray-200/80 shadow-xs hover:border-teal-200"
+                      : "bg-gray-50/30 border-dashed border-gray-200 text-center"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-red-600 text-white text-xs font-black flex items-center justify-center">
+                      <span className="w-6 h-6 rounded-full bg-[#0d6e7e] text-white text-xs font-black flex items-center justify-center">
                         {idx + 1}
                       </span>
                       <span className="text-xs font-bold text-gray-800">
                         {c?.relationship ? `${c.relationship} • Same Blood Group` : `Emergency Donor Contact #${idx + 1}`}
                       </span>
                     </div>
-                    <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
+                    <span className="text-[10px] font-bold text-[#0d6e7e] bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
                       {profile.bloodGroup || "O+"}
                     </span>
                   </div>
@@ -363,14 +363,14 @@ export default function Profile() {
                           <div className="flex items-center justify-between mt-0.5">
                             <a
                               href={`tel:${c.phone}`}
-                              className="inline-flex items-center gap-1.5 text-teal-700 hover:text-teal-800 font-bold"
+                              className="inline-flex items-center gap-1.5 text-[#0d6e7e] hover:text-[#0a5566] font-bold"
                             >
-                              <Phone size={13} className="text-teal-600" />
+                              <Phone size={13} className="text-[#0d6e7e]" />
                               <span>{c.phone}</span>
                             </a>
                             <a
                               href={`tel:${c.phone}`}
-                              className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold"
+                              className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-[#0d6e7e] rounded-lg text-xs font-bold border border-teal-200/70"
                             >
                               Call Now
                             </a>
@@ -382,7 +382,7 @@ export default function Profile() {
                         <div>
                           <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Residential / Work Address</span>
                           <p className="text-gray-700 flex items-start gap-1.5 mt-0.5 leading-snug">
-                            <MapPin size={13} className="text-red-500 shrink-0 mt-0.5" />
+                            <MapPin size={13} className="text-[#0d6e7e] shrink-0 mt-0.5" />
                             <span>{c.address}</span>
                           </p>
                         </div>

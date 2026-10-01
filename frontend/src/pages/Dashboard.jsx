@@ -317,16 +317,16 @@ function PatientDashboard({ data }) {
       <div className="space-y-6">
         
         {/* Same Blood Group Emergency Donors Card */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-red-100 overflow-hidden relative">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 overflow-hidden relative">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-gray-100">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-                <Droplet size={20} className="fill-red-600" />
+              <div className="w-10 h-10 rounded-xl bg-teal-50 text-[#0d6e7e] flex items-center justify-center shrink-0">
+                <Users size={20} className="text-[#0d6e7e]" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-gray-900 text-base">Same Blood Group Emergency Network</h3>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-red-100 text-red-700 border border-red-200">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-[#0d6e7e] border border-teal-200">
                     {profile?.bloodGroup || "O+"} Compatible
                   </span>
                 </div>
@@ -336,7 +336,7 @@ function PatientDashboard({ data }) {
 
             <Link
               href="/profile"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-bold transition-all border border-red-200 shrink-0"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-[#0d6e7e] rounded-xl text-xs font-bold transition-all border border-teal-200 shrink-0"
             >
               View in Profile
             </Link>
@@ -353,20 +353,20 @@ function PatientDashboard({ data }) {
                     key={idx}
                     className={`rounded-2xl p-4.5 border transition-all ${
                       hasInfo
-                        ? "bg-gradient-to-br from-red-50/40 via-white to-white border-red-100 shadow-xs"
-                        : "bg-gray-50/60 border-dashed border-gray-200"
+                        ? "bg-gray-50/60 border-gray-200/80 shadow-xs"
+                        : "bg-gray-50/40 border-dashed border-gray-200"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center">
+                        <span className="w-5 h-5 rounded-full bg-[#0d6e7e] text-white text-[10px] font-bold flex items-center justify-center">
                           {idx + 1}
                         </span>
                         <span className="text-xs font-bold text-gray-800">
                           {c?.relationship ? `${c.relationship} • Same Blood Group` : `Emergency Donor Contact #${idx + 1}`}
                         </span>
                       </div>
-                      <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
+                      <span className="text-[10px] font-semibold text-[#0d6e7e] bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
                         {profile?.bloodGroup || "O+"}
                       </span>
                     </div>
@@ -378,14 +378,14 @@ function PatientDashboard({ data }) {
                           <div className="flex items-center justify-between">
                             <a
                               href={`tel:${c.phone}`}
-                              className="inline-flex items-center gap-1.5 text-teal-700 hover:text-teal-800 font-semibold text-xs"
+                              className="inline-flex items-center gap-1.5 text-[#0d6e7e] hover:text-[#0a5566] font-semibold text-xs"
                             >
-                              <Phone size={13} className="text-teal-600" />
+                              <Phone size={13} className="text-[#0d6e7e]" />
                               <span>{c.phone}</span>
                             </a>
                             <a
                               href={`tel:${c.phone}`}
-                              className="px-2 py-0.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-[11px] font-bold"
+                              className="px-2 py-0.5 bg-teal-50 hover:bg-teal-100 text-[#0d6e7e] border border-teal-200 rounded-lg text-[11px] font-bold"
                             >
                               Quick Dial
                             </a>
@@ -393,7 +393,7 @@ function PatientDashboard({ data }) {
                         )}
                         {c.address && (
                           <div className="flex items-start gap-1.5 text-gray-500 pt-0.5">
-                            <MapPin size={13} className="text-red-500 shrink-0 mt-0.5" />
+                            <MapPin size={13} className="text-[#0d6e7e] shrink-0 mt-0.5" />
                             <span className="leading-snug text-[11px]">{c.address}</span>
                           </div>
                         )}
@@ -414,15 +414,15 @@ function PatientDashboard({ data }) {
               })}
             </div>
           ) : (
-            <div className="bg-red-50/40 border border-dashed border-red-200 rounded-2xl p-5 text-center">
-              <Droplet size={24} className="text-red-500 mx-auto mb-2" />
+            <div className="bg-teal-50/20 border border-dashed border-teal-200/80 rounded-2xl p-5 text-center">
+              <Users size={24} className="text-[#0d6e7e] mx-auto mb-2 opacity-80" />
               <h4 className="text-xs font-bold text-gray-800">No Emergency Blood Donors Registered Yet</h4>
               <p className="text-[11px] text-gray-500 mt-1 max-w-md mx-auto">
                 Secure your medical profile by adding two contacts who share your blood group ({profile?.bloodGroup || "O+"}). In emergency situations, care coordinators can immediately summon life-saving blood.
               </p>
               <Link
                 href="/profile"
-                className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all inline-block"
+                className="mt-3 px-4 py-2 bg-[#0d6e7e] hover:bg-[#0a5566] text-white rounded-xl text-xs font-bold shadow-sm transition-all inline-block"
               >
                 + Register in Profile
               </Link>
@@ -576,12 +576,12 @@ function PatientDashboard({ data }) {
 
             {/* Known Allergies with Inline Add */}
             <div className="pt-2 border-t border-gray-100">
-              <span className="text-[11px] font-bold text-red-700 block mb-1.5 flex items-center gap-1">
-                <AlertTriangle size={12} className="text-red-500" /> Known Allergies & Safety
+              <span className="text-[11px] font-bold text-amber-800 block mb-1.5 flex items-center gap-1">
+                <AlertTriangle size={12} className="text-amber-600" /> Known Allergies & Safety
               </span>
               <div className="flex flex-wrap gap-1.5 mb-2.5">
                 {profile?.allergies?.map((a, i) => (
-                  <span key={i} className="px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-bold uppercase">
+                  <span key={i} className="px-2.5 py-1 bg-amber-50/70 text-amber-800 border border-amber-200/80 rounded-lg text-xs font-semibold uppercase">
                     {a}
                   </span>
                 ))}
