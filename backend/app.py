@@ -1072,7 +1072,9 @@ def get_profile():
             "registrationNumber", "fee", "hospital", "hospitalAddress",
             "hospitalPhone", "hospitalEmail", "hospitalAbout", "hospitalFacilities",
             "hospitalImages", "services", "bio", "status", "dateOfBirth", "bloodGroup",
-            "location"
+            "gender", "location", "address", "primaryDoctorName", "primaryDoctorContact",
+            "majorSurgeries", "existingConditions", "currentMedicines",
+            "sameBloodGroupContacts", "allergies", "emergencyContact"
         ]
         updates = {k: v for k, v in data.items() if k in allowed}
         if updates:
@@ -1232,13 +1234,55 @@ def patients():
     pts = serialize_list(db.patients.find(query).skip(offset).limit(limit))
     return jsonify({"patients": pts, "total": total})
 
-@app.route("/api/patients/<int:patient_id>", methods=["GET"])
+@app.route("/api/patients/<int:patient_id>", methods=["GET", "PATCH"])
 def patient_detail(patient_id):
     db = get_db()
     patient = db.patients.find_one({"id": patient_id})
     if not patient:
-        return jsonify({"error": "Not found"}), 404
-    return jsonify(serialize(patient))
+        user = db.users.find_one({"id": patient_id})
+        if user and user.get("role") == "patient":
+            patient = {
+                "id": patient_id,
+                "fullName": user.get("fullName", ""),
+                "email": user.get("email", ""),
+                "phone": user.get("phone", ""),
+                "bloodGroup": user.get("bloodGroup", "O+"),
+                "allergies": [],
+                "existingConditions": [],
+                "majorSurgeries": [],
+                "currentMedicines": [],
+                "address": "",
+                "primaryDoctorName": "",
+                "primaryDoctorContact": "",
+                "sameBloodGroupContacts": [],
+            }
+            db.patients.insert_one(patient)
+        else:
+            return jsonify({"error": "Not found"}), 404
+
+    if request.method == "PATCH":
+        data = request.get_json() or {}
+        allowed = [
+            "fullName", "phone", "email", "dateOfBirth", "gender", "bloodGroup",
+            "address", "primaryDoctorName", "primaryDoctorContact",
+            "majorSurgeries", "existingConditions", "currentMedicines",
+            "sameBloodGroupContacts", "allergies", "emergencyContact"
+        ]
+        updates = {k: v for k, v in data.items() if k in allowed}
+        if updates:
+            db.patients.update_one({"id": patient_id}, {"$set": updates}, upsert=True)
+            user_updates = {k: updates[k] for k in ["fullName", "email", "phone"] if k in updates}
+            if user_updates:
+                db.users.update_one({"id": patient_id}, {"$set": user_updates})
+        patient = db.patients.find_one({"id": patient_id})
+
+    res = serialize(patient)
+    user_info = db.users.find_one({"id": patient_id})
+    if user_info:
+        for k in ["fullName", "email", "phone"]:
+            if not res.get(k) and user_info.get(k):
+                res[k] = user_info.get(k)
+    return jsonify(res)
 
 @app.route("/api/patients/<int:patient_id>/history", methods=["GET"])
 def patient_history(patient_id):
@@ -1532,6 +1576,11 @@ def dashboard_patient():
     patient_vax_cursor = db.vaccinations.find({"patientId": user_id}).sort("date", -1)
     patient_vaccinations = serialize_list(patient_vax_cursor)
     patient_profile = db.patients.find_one({"id": user_id}) or {}
+    patient_profile_data = serialize(patient_profile)
+    for k in ["fullName", "email", "phone", "bloodGroup"]:
+        if not patient_profile_data.get(k) and user.get(k):
+            patient_profile_data[k] = user.get(k)
+
     expenses_summary = calculate_patient_expenses(user_id)
 
     return jsonify({
@@ -1543,7 +1592,8 @@ def dashboard_patient():
         "recentActivity": recentActivity,
         "vaccinationStatus": patient_profile.get("vaccinationStatus", "Pending verification"),
         "vaccinations": patient_vaccinations,
-        "expenses": expenses_summary
+        "expenses": expenses_summary,
+        "patientProfile": patient_profile_data
     })
 
 @app.route("/api/expenses", methods=["GET"])

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { Calendar, FileText, FlaskConical, Bell, Users, Activity, AlertTriangle, Clock, ChevronRight, Stethoscope, Building2, X, Brain, Droplet, TrendingUp, Plus, Minus, User, Syringe, ShieldCheck, ClipboardCheck, Receipt, Pill, MapPin, Phone, Camera, Image as ImageIcon } from "lucide-react";
+import { Calendar, FileText, FlaskConical, Bell, Users, Activity, AlertTriangle, Clock, ChevronRight, Stethoscope, Building2, X, Brain, Droplet, TrendingUp, Plus, Minus, User, Syringe, ShieldCheck, ClipboardCheck, Receipt, Pill, MapPin, Phone, Camera, Image as ImageIcon, Edit3, HeartPulse, Sparkles, CheckCircle2, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
 import PrescriptionModal from "@/components/PrescriptionModal";
 import DoctorHospitalProfileModal from "@/components/DoctorHospitalProfileModal";
@@ -52,6 +52,9 @@ function PatientDashboard({ data }) {
   };
 
   useEffect(() => {
+    if (data?.patientProfile) {
+      setProfile(data.patientProfile);
+    }
     if (data?.expenses) {
       setExpenses(data.expenses);
     }
@@ -108,25 +111,33 @@ function PatientDashboard({ data }) {
 
   return (
     <div className="space-y-6">
-      {/* Profile Header Summary with clickable image trigger */}
+      {/* Profile Header Summary */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-5">
-        <button 
-          onClick={() => setShowAddAllergyModal(true)}
-          className="relative group shrink-0"
-          title="Add New Allergy"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-[#0d6e7e] flex items-center justify-center transition-all group-hover:ring-4 group-hover:ring-teal-50 overflow-hidden">
-             <User size={32} className="text-white" />
-             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <Plus size={20} className="text-white" />
-             </div>
-          </div>
-        </button>
+        <div className="w-16 h-16 rounded-2xl bg-[#0d6e7e] flex items-center justify-center text-white shrink-0 shadow-sm">
+          <User size={30} />
+        </div>
         <div>
-          <h2 className="text-xl font-bold text-gray-900">{profile?.fullName || user.fullName}</h2>
-          <p className="text-sm text-gray-500">
-            {profile?.bloodGroup || "O+"} • {profile?.gender || "Male"} • {profile?.dateOfBirth || "—"}
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-bold text-gray-900">{profile?.fullName || user.fullName}</h2>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-red-100 text-red-700 border border-red-200">
+              <Droplet size={11} className="fill-red-600 text-red-600" />
+              {profile?.bloodGroup || "O+"}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1 flex flex-wrap items-center gap-3">
+            <span>{profile?.gender || "Patient"} • {profile?.dateOfBirth || "DOB not specified"}</span>
+            {(profile?.phone || user?.phone) && (
+              <span className="flex items-center gap-1 text-gray-600 font-medium">
+                <Phone size={11} className="text-[#0d6e7e]" /> {profile?.phone || user?.phone}
+              </span>
+            )}
           </p>
+          {profile?.address && (
+            <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-1 truncate max-w-md">
+              <MapPin size={12} className="text-[#0d6e7e] shrink-0" />
+              <span>{profile.address}</span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -302,30 +313,301 @@ function PatientDashboard({ data }) {
         )}
       </div>
 
-      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-        <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <AlertTriangle size={16} className="text-red-500" /> My Allergies & Safety
-        </h3>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {profile?.allergies?.map((a, i) => (
-            <span key={i} className="px-2 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-medium border border-red-100">
-              {a}
-            </span>
-          ))}
-          {(!profile?.allergies || profile.allergies.length === 0) && <p className="text-sm text-gray-500">No allergies listed.</p>}
+      {/* ─── Patient Medical Profile & Emergency Network ─── */}
+      <div className="space-y-6">
+        
+        {/* Same Blood Group Emergency Donors Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-red-100 overflow-hidden relative">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                <Droplet size={20} className="fill-red-600" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-gray-900 text-base">Same Blood Group Emergency Network</h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-red-100 text-red-700 border border-red-200">
+                    {profile?.bloodGroup || "O+"} Compatible
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">2 registered donors sharing your exact blood group for urgent transfusion assistance</p>
+              </div>
+            </div>
+
+            <Link
+              href="/profile"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-bold transition-all border border-red-200 shrink-0"
+            >
+              View in Profile
+            </Link>
+          </div>
+
+          {/* 2 Contacts Cards or Prompt */}
+          {profile?.sameBloodGroupContacts && (profile.sameBloodGroupContacts[0]?.name || profile.sameBloodGroupContacts[1]?.name) ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[0, 1].map((idx) => {
+                const c = profile?.sameBloodGroupContacts?.[idx];
+                const hasInfo = Boolean(c && (c.name || c.phone));
+                return (
+                  <div
+                    key={idx}
+                    className={`rounded-2xl p-4.5 border transition-all ${
+                      hasInfo
+                        ? "bg-gradient-to-br from-red-50/40 via-white to-white border-red-100 shadow-xs"
+                        : "bg-gray-50/60 border-dashed border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center">
+                          {idx + 1}
+                        </span>
+                        <span className="text-xs font-bold text-gray-800">
+                          {c?.relationship ? `${c.relationship} • Same Blood Group` : `Emergency Donor Contact #${idx + 1}`}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
+                        {profile?.bloodGroup || "O+"}
+                      </span>
+                    </div>
+
+                    {hasInfo ? (
+                      <div className="space-y-2 text-xs">
+                        <p className="font-bold text-gray-900 text-sm">{c.name || "Unnamed Contact"}</p>
+                        {c.phone && (
+                          <div className="flex items-center justify-between">
+                            <a
+                              href={`tel:${c.phone}`}
+                              className="inline-flex items-center gap-1.5 text-teal-700 hover:text-teal-800 font-semibold text-xs"
+                            >
+                              <Phone size={13} className="text-teal-600" />
+                              <span>{c.phone}</span>
+                            </a>
+                            <a
+                              href={`tel:${c.phone}`}
+                              className="px-2 py-0.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-[11px] font-bold"
+                            >
+                              Quick Dial
+                            </a>
+                          </div>
+                        )}
+                        {c.address && (
+                          <div className="flex items-start gap-1.5 text-gray-500 pt-0.5">
+                            <MapPin size={13} className="text-red-500 shrink-0 mt-0.5" />
+                            <span className="leading-snug text-[11px]">{c.address}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="py-3 text-center">
+                        <p className="text-xs text-gray-400 italic mb-2">No contact registered for Donor #{idx + 1}</p>
+                        <Link
+                          href="/profile"
+                          className="text-xs font-bold text-[#0d6e7e] hover:underline"
+                        >
+                          + Add in Profile
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-red-50/40 border border-dashed border-red-200 rounded-2xl p-5 text-center">
+              <Droplet size={24} className="text-red-500 mx-auto mb-2" />
+              <h4 className="text-xs font-bold text-gray-800">No Emergency Blood Donors Registered Yet</h4>
+              <p className="text-[11px] text-gray-500 mt-1 max-w-md mx-auto">
+                Secure your medical profile by adding two contacts who share your blood group ({profile?.bloodGroup || "O+"}). In emergency situations, care coordinators can immediately summon life-saving blood.
+              </p>
+              <Link
+                href="/profile"
+                className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all inline-block"
+              >
+                + Register in Profile
+              </Link>
+            </div>
+          )}
         </div>
-        <div className="flex gap-2">
-          <input 
-            type="text" 
-            value={newAllergy} 
-            onChange={(e) => setNewAllergy(e.target.value)}
-            placeholder="Add allergy (e.g. Penicillin)"
-            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
-          <button onClick={handleAddAllergy} className="p-1.5 bg-[#0d6e7e] text-white rounded-lg hover:bg-[#0a5566]">
-            <Plus size={18} />
-          </button>
+
+        {/* 2-Column Grid: Primary Doctor & Medical History */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Card: Primary Doctor & Residential Address */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-teal-50 text-[#0d6e7e] flex items-center justify-center">
+                    <Stethoscope size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-900">Primary Doctor & Residence</h4>
+                    <p className="text-[10px] text-gray-400">Regular physician & emergency location</p>
+                  </div>
+                </div>
+                <Link
+                  href="/profile"
+                  className="text-xs text-[#0d6e7e] hover:underline font-bold"
+                >
+                  Profile
+                </Link>
+              </div>
+
+              {/* Primary Doctor */}
+              <div className="bg-teal-50/30 rounded-xl p-3.5 border border-teal-100/60 mb-3.5">
+                <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider block mb-1">
+                  Primary / Family Doctor
+                </span>
+                {profile?.primaryDoctorName ? (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-gray-900">{profile.primaryDoctorName}</p>
+                      {profile.primaryDoctorContact && (
+                        <a
+                          href={`tel:${profile.primaryDoctorContact}`}
+                          className="text-[11px] text-[#0d6e7e] hover:underline font-semibold flex items-center gap-1 mt-0.5"
+                        >
+                          <Phone size={11} /> {profile.primaryDoctorContact}
+                        </a>
+                      )}
+                    </div>
+                    {profile.primaryDoctorContact && (
+                      <a
+                        href={`tel:${profile.primaryDoctorContact}`}
+                        className="px-2.5 py-1 bg-[#0d6e7e] text-white rounded-lg text-xs font-bold shadow-xs hover:bg-[#0a5566]"
+                      >
+                        Call Doctor
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No primary physician specified.</p>
+                )}
+              </div>
+
+              {/* Address */}
+              <div className="bg-gray-50/70 rounded-xl p-3.5 border border-gray-200/70">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                  Residential Address
+                </span>
+                {profile?.address ? (
+                  <p className="text-xs text-gray-800 flex items-start gap-1.5 leading-relaxed">
+                    <MapPin size={13} className="text-[#0d6e7e] shrink-0 mt-0.5" />
+                    <span>{profile.address}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No address on file. Please update your profile.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Card: Medical History (Surgeries, Conditions, Meds & Allergies) */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Activity size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-gray-900">Medical History & Current Meds</h4>
+                  <p className="text-[10px] text-gray-400">Surgeries, chronic illnesses, active prescriptions & allergies</p>
+                </div>
+              </div>
+              <Link
+                href="/profile"
+                className="text-xs text-[#0d6e7e] hover:underline font-bold"
+              >
+                Profile
+              </Link>
+            </div>
+
+            {/* Major Surgeries */}
+            <div>
+              <span className="text-[11px] font-bold text-gray-700 block mb-1.5 flex items-center gap-1">
+                <Activity size={12} className="text-[#0d6e7e]" /> Major Surgeries & Procedures
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {profile?.majorSurgeries?.map((s, i) => (
+                  <span key={i} className="px-2.5 py-1 bg-teal-50 text-[#0d6e7e] border border-teal-200 rounded-lg text-xs font-semibold">
+                    {s}
+                  </span>
+                ))}
+                {(!profile?.majorSurgeries || profile.majorSurgeries.length === 0) && (
+                  <span className="text-xs text-gray-400 italic">No surgeries recorded</span>
+                )}
+              </div>
+            </div>
+
+            {/* Chronic Conditions */}
+            <div>
+              <span className="text-[11px] font-bold text-gray-700 block mb-1.5 flex items-center gap-1">
+                <HeartPulse size={12} className="text-amber-600" /> Chronic / Major Conditions
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {profile?.existingConditions?.map((c, i) => (
+                  <span key={i} className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-xs font-semibold">
+                    {c}
+                  </span>
+                ))}
+                {(!profile?.existingConditions || profile.existingConditions.length === 0) && (
+                  <span className="text-xs text-gray-400 italic">No chronic conditions listed</span>
+                )}
+              </div>
+            </div>
+
+            {/* Current Medicines */}
+            <div>
+              <span className="text-[11px] font-bold text-gray-700 block mb-1.5 flex items-center gap-1">
+                <Pill size={12} className="text-emerald-600" /> Current Medications
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {profile?.currentMedicines?.map((m, i) => (
+                  <span key={i} className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold">
+                    {m}
+                  </span>
+                ))}
+                {(!profile?.currentMedicines || profile.currentMedicines.length === 0) && (
+                  <span className="text-xs text-gray-400 italic">No ongoing medicines recorded</span>
+                )}
+              </div>
+            </div>
+
+            {/* Known Allergies with Inline Add */}
+            <div className="pt-2 border-t border-gray-100">
+              <span className="text-[11px] font-bold text-red-700 block mb-1.5 flex items-center gap-1">
+                <AlertTriangle size={12} className="text-red-500" /> Known Allergies & Safety
+              </span>
+              <div className="flex flex-wrap gap-1.5 mb-2.5">
+                {profile?.allergies?.map((a, i) => (
+                  <span key={i} className="px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-bold uppercase">
+                    {a}
+                  </span>
+                ))}
+                {(!profile?.allergies || profile.allergies.length === 0) && (
+                  <span className="text-xs text-gray-400 italic">No allergies listed</span>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={newAllergy} 
+                  onChange={(e) => setNewAllergy(e.target.value)}
+                  placeholder="Add allergy (e.g. Penicillin)"
+                  className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#0d6e7e]"
+                />
+                <button onClick={handleAddAllergy} className="px-3 py-1.5 bg-[#0d6e7e] text-white rounded-lg text-xs font-bold hover:bg-[#0a5566] transition-colors flex items-center gap-1">
+                  <Plus size={14} /> Add
+                </button>
+              </div>
+            </div>
+
+          </div>
+
         </div>
+
       </div>
 
       {prescriptions.some((prescription) => prescription.prescriptionPdfUrl) && (
