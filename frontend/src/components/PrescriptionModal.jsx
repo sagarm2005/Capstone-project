@@ -555,22 +555,60 @@ export default function PrescriptionModal({
                 </span>
               </div>
 
-              {/* Patient Selection Dropdown */}
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-bold text-gray-600 shrink-0">Select Patient:</label>
-                <select
-                  value={selectedPatientId}
-                  onChange={handlePatientSelect}
-                  required
-                  className="px-3 py-1.5 bg-white border border-gray-300 rounded-xl text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-[#0d6e7e] outline-none"
-                >
-                  <option value={0}>Choose registered patient...</option>
-                  {patients.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.fullName} (ID #{p.id}) {p.allergies?.length ? `— [${p.allergies.length} Allergies]` : ""}
-                    </option>
-                  ))}
-                </select>
+              {/* Patient Selection Dropdown & Add Allergy option */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-bold text-gray-600 shrink-0">Select Patient:</label>
+                  <select
+                    value={selectedPatientId}
+                    onChange={handlePatientSelect}
+                    required
+                    className="px-3 py-1.5 bg-white border border-gray-300 rounded-xl text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-[#0d6e7e] outline-none"
+                  >
+                    <option value={0}>Choose registered patient...</option>
+                    {patients.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.fullName} (ID #{p.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedPatientId > 0 && (
+                  showAddAllergy ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Allergy (e.g. Penicillin)"
+                        value={newAllergyInput}
+                        onChange={(e) => setNewAllergyInput(e.target.value)}
+                        className="px-2 py-1 text-xs border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#0d6e7e] outline-none w-36"
+                      />
+                      <button
+                        type="button"
+                        onClick={addAllergyToPatient}
+                        className="px-2 py-1 bg-[#0d6e7e] text-white rounded-lg text-xs font-bold hover:bg-[#0a5566]"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddAllergy(false)}
+                        className="px-1.5 py-1 text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddAllergy(true)}
+                      className="text-xs text-[#0d6e7e] hover:underline font-bold"
+                    >
+                      + Add Allergy
+                    </button>
+                  )
+                )}
               </div>
             </div>
 
@@ -628,64 +666,56 @@ export default function PrescriptionModal({
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Documented Allergies Warning Strip */}
-            <div className="pt-2 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-amber-800 flex items-center gap-1">
-                  <ShieldAlert size={14} className="text-amber-600" /> Patient Allergies:
-                </span>
-                {patientData?.allergies?.length > 0 ? (
-                  patientData.allergies.map((a, idx) => (
-                    <span
-                      key={idx}
-                      className="px-2.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold"
-                    >
-                      ⚠️ {a}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-gray-400 italic">No documented drug allergies on record.</span>
-                )}
-              </div>
-
-              {selectedPatientId > 0 && (
-                <div>
-                  {showAddAllergy ? (
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        placeholder="e.g. Penicillin"
-                        value={newAllergyInput}
-                        onChange={(e) => setNewAllergyInput(e.target.value)}
-                        className="px-2 py-1 text-xs border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#0d6e7e] outline-none w-36"
-                      />
-                      <button
-                        type="button"
-                        onClick={addAllergyToPatient}
-                        className="px-2 py-1 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddAllergy(false)}
-                        className="px-1.5 py-1 text-xs text-gray-500 hover:text-gray-700"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowAddAllergy(true)}
-                      className="text-xs text-amber-800 hover:underline font-bold"
-                    >
-                      + Add Known Allergy
-                    </button>
-                  )}
-                </div>
-              )}
+          {/* Follow-up & Vitals Grid (Shifted below Patient Demographics & Clinical Records) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50/70 p-4 rounded-2xl border border-gray-200">
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Blood Pressure
+              </label>
+              <input
+                type="text"
+                placeholder="120/80 mmHg"
+                value={bp}
+                onChange={(e) => setBp(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-[#0d6e7e] outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Blood Sugar
+              </label>
+              <input
+                type="text"
+                placeholder="100 mg/dL"
+                value={sugar}
+                onChange={(e) => setSugar(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-[#0d6e7e] outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Heart Rate
+              </label>
+              <input
+                type="text"
+                placeholder="72 bpm"
+                value={heartRate}
+                onChange={(e) => setHeartRate(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-[#0d6e7e] outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Follow-up Date
+              </label>
+              <input
+                type="date"
+                value={followupDate}
+                onChange={(e) => setFollowupDate(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-[#0d6e7e] outline-none"
+              />
             </div>
           </div>
 
@@ -1071,56 +1101,7 @@ export default function PrescriptionModal({
             </div>
           </div>
 
-          {/* Follow-up & Vitals Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50/70 p-4 rounded-2xl border border-gray-200">
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                Blood Pressure
-              </label>
-              <input
-                type="text"
-                placeholder="120/80 mmHg"
-                value={bp}
-                onChange={(e) => setBp(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-teal-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                Blood Sugar
-              </label>
-              <input
-                type="text"
-                placeholder="100 mg/dL"
-                value={sugar}
-                onChange={(e) => setSugar(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-teal-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                Heart Rate
-              </label>
-              <input
-                type="text"
-                placeholder="72 bpm"
-                value={heartRate}
-                onChange={(e) => setHeartRate(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-teal-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                Follow-up Date
-              </label>
-              <input
-                type="date"
-                value={followupDate}
-                onChange={(e) => setFollowupDate(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-teal-500 outline-none"
-              />
-            </div>
-          </div>
+
 
           {/* Doctor's Advice & Clinical Instructions */}
           <div className="bg-slate-50/70 rounded-2xl p-4.5 border border-slate-200">
