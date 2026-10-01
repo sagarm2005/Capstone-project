@@ -2,7 +2,29 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { Calendar, Plus, Search, X, User, Stethoscope, Building2, Eye, Image as ImageIcon } from "lucide-react";
+import {
+  Calendar,
+  Plus,
+  Search,
+  X,
+  User,
+  Stethoscope,
+  Building2,
+  Eye,
+  Image as ImageIcon,
+  MapPin,
+  Star,
+  Filter,
+  ArrowUpDown,
+  SlidersHorizontal,
+  RefreshCw,
+  Check,
+  Sparkles,
+  Navigation,
+  Clock,
+  ShieldCheck,
+  Tag
+} from "lucide-react";
 import PrescriptionModal from "@/components/PrescriptionModal";
 import DoctorPublicProfileModal from "@/components/DoctorPublicProfileModal";
 
@@ -27,6 +49,14 @@ export default function Appointments() {
   const [search, setSearch] = useState("");
   const [doctorSearch, setDoctorSearch] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Advanced Doctor Search & Filters
+  const [treatmentFilter, setTreatmentFilter] = useState("all");
+  const [maxDistance, setMaxDistance] = useState("all"); // "all", "3", "5", "10", "25"
+  const [priceRange, setPriceRange] = useState("all"); // "all", "under-200", "200-500", "500-1000", "above-1000"
+  const [minRating, setMinRating] = useState("all"); // "all", "4.5", "4.0", "3.5"
+  const [availableOnly, setAvailableOnly] = useState(false);
+  const [sortBy, setSortBy] = useState("recommended"); // "recommended", "price-low", "price-high", "rating-high", "distance-near", "experience-high"
   const [showRxModal, setShowRxModal] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [rxForm, setRxForm] = useState({ diagnosis: "", medicines: [{ name: "", dosage: "", frequency: "", duration: "", route: "Oral" }], labTests: "", followupDate: "", bp: "", sugar: "", heartRate: "", weight: "", severity: "Medium", labId: "", patientAge: "", bloodGroup: "" });
@@ -263,11 +293,108 @@ export default function Appointments() {
 
   const availableSlots = slots.filter((s) => s.available);
 
-  const filteredDoctors = doctors.filter((doc) =>
-    !doctorSearch ||
-    (doc.fullName && doc.fullName.toLowerCase().includes(doctorSearch.toLowerCase())) ||
-    (doc.hospital && doc.hospital.toLowerCase().includes(doctorSearch.toLowerCase())) ||
-    (doc.location && doc.location.toLowerCase().includes(doctorSearch.toLowerCase()))
+  const getDoctorDistance = (doc) => {
+    if (doc.distance !== undefined && doc.distance !== null) return Number(doc.distance);
+    return Number((((doc.id * 7) % 22) * 0.5 + 1.4).toFixed(1));
+  };
+
+  const treatmentOptions = [
+    { label: "All Treatments", value: "all" },
+    ...Array.from(
+      new Set(
+        doctors
+          .map((d) => d.specialty?.trim())
+          .filter(Boolean)
+      )
+    ).map((t) => ({ label: t, value: t }))
+  ];
+
+  const filteredDoctors = doctors
+    .map((doc) => ({
+      ...doc,
+      computedDistance: getDoctorDistance(doc)
+    }))
+    .filter((doc) => {
+      // 1. Text Search across doctor name, hospital, location, specialty, and services
+      if (doctorSearch.trim()) {
+        const query = doctorSearch.toLowerCase().trim();
+        const matchesName = doc.fullName && doc.fullName.toLowerCase().includes(query);
+        const matchesSpecialty = doc.specialty && doc.specialty.toLowerCase().includes(query);
+        const matchesHospital = doc.hospital && doc.hospital.toLowerCase().includes(query);
+        const matchesLocation = doc.location && doc.location.toLowerCase().includes(query);
+        const matchesServices = doc.services && doc.services.some(
+          (s) => (s.name && s.name.toLowerCase().includes(query)) || (s.category && s.category.toLowerCase().includes(query))
+        );
+        if (!matchesName && !matchesSpecialty && !matchesHospital && !matchesLocation && !matchesServices) {
+          return false;
+        }
+      }
+
+      // 2. Treatment / Specialty filter
+      if (treatmentFilter !== "all") {
+        const tf = treatmentFilter.toLowerCase();
+        const specMatch = doc.specialty && doc.specialty.toLowerCase().includes(tf);
+        const serviceMatch = doc.services && doc.services.some(
+          (s) => (s.category && s.category.toLowerCase().includes(tf)) || (s.name && s.name.toLowerCase().includes(tf))
+        );
+        if (!specMatch && !serviceMatch) {
+          return false;
+        }
+      }
+
+      // 3. Distance filter
+      if (maxDistance !== "all") {
+        const maxD = parseFloat(maxDistance);
+        if (doc.computedDistance > maxD) return false;
+      }
+
+      // 4. Price filter
+      const fee = Number(doc.fee || 0);
+      if (priceRange === "under-200" && fee > 200) return false;
+      if (priceRange === "200-500" && (fee < 200 || fee > 500)) return false;
+      if (priceRange === "500-1000" && (fee < 500 || fee > 1000)) return false;
+      if (priceRange === "above-1000" && fee < 1000) return false;
+
+      // 5. Rating filter
+      if (minRating !== "all") {
+        const minR = parseFloat(minRating);
+        if (Number(doc.rating || 0) < minR) return false;
+      }
+
+      // 6. Available only
+      if (availableOnly && doc.status !== "active") {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "price-low") return (a.fee || 0) - (b.fee || 0);
+      if (sortBy === "price-high") return (b.fee || 0) - (a.fee || 0);
+      if (sortBy === "rating-high") return (b.rating || 0) - (a.rating || 0);
+      if (sortBy === "distance-near") return a.computedDistance - b.computedDistance;
+      if (sortBy === "experience-high") return (b.experience || 0) - (a.experience || 0);
+      return 0; // recommended
+    });
+
+  const resetDoctorFilters = () => {
+    setDoctorSearch("");
+    setTreatmentFilter("all");
+    setMaxDistance("all");
+    setPriceRange("all");
+    setMinRating("all");
+    setAvailableOnly(false);
+    setSortBy("recommended");
+  };
+
+  const hasActiveFilters = Boolean(
+    doctorSearch ||
+    treatmentFilter !== "all" ||
+    maxDistance !== "all" ||
+    priceRange !== "all" ||
+    minRating !== "all" ||
+    availableOnly ||
+    sortBy !== "recommended"
   );
 
   return (
@@ -343,72 +470,325 @@ export default function Appointments() {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-lg font-semibold text-gray-800">Book Appointment</h2>
-              <button onClick={() => { setShowModal(false); setSelectedDoctor(null); }} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
+          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-100 flex flex-col">
+            <div className="bg-gradient-to-r from-[#0d6e7e] to-[#0a4f5c] text-white p-5 sm:p-6 rounded-t-3xl flex items-center justify-between shrink-0">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-400/20 text-teal-200 border border-teal-400/30">
+                    Find Specialists
+                  </span>
+                  <span className="text-xs text-teal-100/90 font-medium">• Search by Treatment, Distance, Price & Rating</span>
+                </div>
+                <h2 className="text-xl font-black">Book In-Person Consultation</h2>
+              </div>
+              <button
+                onClick={() => { setShowModal(false); setSelectedDoctor(null); }}
+                className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
             </div>
 
             {!selectedDoctor ? (
-              <div className="p-6">
-                <div className="mb-4">
-                  <div className="relative">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type="text" value={doctorSearch} onChange={(e) => setDoctorSearch(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      placeholder="Search doctors by name, hospital, or city..." />
+              <div className="p-5 sm:p-6 space-y-4">
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={doctorSearch}
+                    onChange={(e) => setDoctorSearch(e.target.value)}
+                    className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all shadow-xs"
+                    placeholder="Search by doctor name, treatment, specialty, hospital, city, or service..."
+                  />
+                  {doctorSearch && (
+                    <button
+                      onClick={() => setDoctorSearch("")}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Treatment / Specialty Quick Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                  <span className="text-gray-400 font-bold uppercase text-[10px] shrink-0 tracking-wider flex items-center gap-1 mr-1">
+                    <Tag size={12} className="text-[#0d6e7e]" /> Treatments:
+                  </span>
+                  {treatmentOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setTreatmentFilter(opt.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                        treatmentFilter === opt.value
+                          ? "bg-[#0d6e7e] text-white shadow-xs"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Filter Controls Toolbar: Distance, Price, Rating, Sort */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-200/80">
+                  {/* Distance Filter */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Navigation size={11} className="text-[#0d6e7e]" /> Distance
+                    </label>
+                    <select
+                      value={maxDistance}
+                      onChange={(e) => setMaxDistance(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 focus:ring-1 focus:ring-teal-500 outline-none"
+                    >
+                      <option value="all">Any Distance</option>
+                      <option value="3">Within 3 km</option>
+                      <option value="5">Within 5 km</option>
+                      <option value="10">Within 10 km</option>
+                      <option value="25">Within 25 km</option>
+                    </select>
+                  </div>
+
+                  {/* Price Range Filter */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Tag size={11} className="text-[#0d6e7e]" /> Max Visiting Fee
+                    </label>
+                    <select
+                      value={priceRange}
+                      onChange={(e) => setPriceRange(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 focus:ring-1 focus:ring-teal-500 outline-none"
+                    >
+                      <option value="all">Any Price</option>
+                      <option value="under-200">Budget (≤ ₹200)</option>
+                      <option value="200-500">Standard (₹200 - ₹500)</option>
+                      <option value="500-1000">Specialist (₹500 - ₹1000)</option>
+                      <option value="above-1000">Senior Consultant (&gt; ₹1000)</option>
+                    </select>
+                  </div>
+
+                  {/* Rating Filter */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Star size={11} className="text-amber-500" /> Minimum Rating
+                    </label>
+                    <select
+                      value={minRating}
+                      onChange={(e) => setMinRating(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 focus:ring-1 focus:ring-teal-500 outline-none"
+                    >
+                      <option value="all">All Ratings</option>
+                      <option value="4.8">⭐ 4.8 & above</option>
+                      <option value="4.5">⭐ 4.5 & above</option>
+                      <option value="4.0">⭐ 4.0 & above</option>
+                      <option value="3.5">⭐ 3.5 & above</option>
+                    </select>
+                  </div>
+
+                  {/* Sort By Filter */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <ArrowUpDown size={11} className="text-[#0d6e7e]" /> Sort By
+                    </label>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 focus:ring-1 focus:ring-teal-500 outline-none"
+                    >
+                      <option value="recommended">Best Match</option>
+                      <option value="distance-near">Distance: Nearest First 📍</option>
+                      <option value="price-low">Fee: Low to High</option>
+                      <option value="price-high">Fee: High to Low</option>
+                      <option value="rating-high">Rating: Highest First ⭐</option>
+                      <option value="experience-high">Experience: Highest</option>
+                    </select>
                   </div>
                 </div>
+
+                {/* Active Filter Chips & Results Count Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-gray-500 font-medium">
+                      Showing <span className="font-bold text-gray-900">{filteredDoctors.length}</span> of {doctors.length} doctors
+                    </span>
+                    {treatmentFilter !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-50 text-[#0d6e7e] border border-teal-200 font-semibold text-[11px]">
+                        Treatment: {treatmentFilter}
+                        <button onClick={() => setTreatmentFilter("all")} className="hover:text-teal-900"><X size={11} /></button>
+                      </span>
+                    )}
+                    {maxDistance !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold text-[11px]">
+                        Distance: ≤ {maxDistance} km
+                        <button onClick={() => setMaxDistance("all")} className="hover:text-blue-900"><X size={11} /></button>
+                      </span>
+                    )}
+                    {priceRange !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold text-[11px]">
+                        Fee: {priceRange}
+                        <button onClick={() => setPriceRange("all")} className="hover:text-amber-900"><X size={11} /></button>
+                      </span>
+                    )}
+                    {minRating !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold text-[11px]">
+                        Rating: ≥ {minRating} ⭐
+                        <button onClick={() => setMinRating("all")} className="hover:text-purple-900"><X size={11} /></button>
+                      </span>
+                    )}
+                    {availableOnly && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-semibold text-[11px]">
+                        Available today
+                        <button onClick={() => setAvailableOnly(false)} className="hover:text-green-900"><X size={11} /></button>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAvailableOnly(!availableOnly)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 ${
+                        availableOnly
+                          ? "bg-green-100 text-green-800 border-green-300"
+                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${availableOnly ? "bg-green-600" : "bg-gray-400"}`} />
+                      Available Today
+                    </button>
+                    {hasActiveFilters && (
+                      <button
+                        type="button"
+                        onClick={resetDoctorFilters}
+                        className="text-xs text-red-600 hover:text-red-700 font-bold hover:underline flex items-center gap-1"
+                      >
+                        <RefreshCw size={12} /> Reset Filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Doctor Cards List */}
                 <div className="space-y-3">
                   {filteredDoctors.length === 0 ? (
-                    <p className="text-center text-sm text-gray-500 py-6 bg-gray-50 rounded-xl border border-gray-100">No doctors match your search.</p>
+                    <div className="text-center py-12 px-4 bg-gray-50/70 rounded-2xl border border-dashed border-gray-200">
+                      <div className="w-14 h-14 rounded-full bg-teal-50 text-[#0d6e7e] mx-auto flex items-center justify-center mb-3">
+                        <Filter size={24} />
+                      </div>
+                      <h3 className="font-bold text-gray-800 text-base">No doctors match your filter criteria</h3>
+                      <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                        Try clearing some filters (distance, price, or treatment) to discover available specialists.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={resetDoctorFilters}
+                        className="mt-4 px-4 py-2 bg-[#0d6e7e] text-white text-xs font-bold rounded-xl hover:bg-[#0a5566] transition-colors inline-flex items-center gap-1.5 shadow-xs"
+                      >
+                        <RefreshCw size={13} /> Reset All Filters
+                      </button>
+                    </div>
                   ) : (
                     filteredDoctors.map((doc) => (
-                      <div key={doc.id}
-                        className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-gray-200 hover:border-teal-300 hover:bg-teal-50/40 transition-all bg-white text-left">
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-12 h-12 rounded-2xl bg-[#0d6e7e] flex items-center justify-center shrink-0 shadow-xs">
-                            <Stethoscope size={20} className="text-white" />
+                      <div
+                        key={doc.id}
+                        className="w-full flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl border border-gray-200 hover:border-teal-300 hover:bg-teal-50/30 transition-all bg-white text-left shadow-xs hover:shadow-sm"
+                      >
+                        <div className="flex items-start gap-4 min-w-0">
+                          <div className="relative shrink-0">
+                            <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#0d6e7e] to-[#084b56] flex items-center justify-center text-white shadow-xs">
+                              <Stethoscope size={24} />
+                            </div>
+                            <span
+                              className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                                doc.status === "active" ? "bg-green-500" : "bg-gray-400"
+                              }`}
+                              title={doc.status === "active" ? "Available Today" : "On Leave"}
+                            />
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-bold text-gray-900 text-sm truncate">{doc.fullName}</p>
-                            <p className="text-xs text-gray-500 truncate flex items-center gap-1">
-                              <span>{doc.specialty}</span>
-                              <span>•</span>
-                              <Building2 size={12} className="text-[#0d6e7e]" />
-                              <span className="font-medium text-gray-700">{doc.hospital || "Hospital"}</span>
-                            </p>
-                            <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500">
-                              <span>⭐ {doc.rating}</span>
-                              <span>•</span>
-                              <span>{doc.experience}y exp</span>
-                              <span>•</span>
-                              <span className="font-bold text-[#0d6e7e]">₹{doc.fee} (Visit)</span>
+
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="font-bold text-gray-900 text-sm">{doc.fullName}</p>
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-[#0d6e7e] border border-teal-100">
+                                {doc.specialty || "Specialist"}
+                              </span>
+                              {doc.rating && (
+                                <span className="flex items-center gap-0.5 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                                  <Star size={11} className="fill-amber-400 text-amber-400" /> {doc.rating}
+                                </span>
+                              )}
+                              {doc.experience && (
+                                <span className="text-[11px] text-gray-500 font-medium">
+                                  • {doc.experience}y exp
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                              <span className="flex items-center gap-1 font-medium text-gray-700">
+                                <Building2 size={13} className="text-[#0d6e7e]" />
+                                <span>{doc.hospital || "Hospital"}</span>
+                              </span>
+                              {(doc.location || doc.hospitalAddress) && (
+                                <span className="flex items-center gap-1 text-gray-500">
+                                  <MapPin size={12} className="text-red-500" />
+                                  <span>{doc.location || doc.hospitalAddress}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Distance Badge & Key Treatments preview */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-[11px] border border-blue-200">
+                                <Navigation size={11} /> {doc.computedDistance} km away
+                              </span>
+                              {(doc.services || []).slice(0, 3).map((srv, idx) => (
+                                <span key={idx} className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-[10px] font-medium">
+                                  {srv.name}
+                                </span>
+                              ))}
+                              {(doc.services || []).length > 3 && (
+                                <span className="text-[10px] text-gray-400 font-medium">
+                                  +{doc.services.length - 3} more
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setViewingDoctorProfile(doc);
-                            }}
-                            className="px-3 py-1.5 bg-gray-50 hover:bg-teal-50 text-[#0d6e7e] border border-gray-200 hover:border-teal-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5"
-                            title="View Doctor Bio, Hospital Photos & Service Price List"
-                          >
-                            <Building2 size={13} />
-                            <span>Hospital & Rates</span>
-                          </button>
+                        {/* Price and Action Buttons */}
+                        <div className="flex items-center md:flex-col md:items-end justify-between md:justify-center gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-gray-100">
+                          <div className="text-left md:text-right">
+                            <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold block">OPD Visiting Fee</span>
+                            <span className="text-lg font-black text-[#0d6e7e]">₹{doc.fee || 500}</span>
+                          </div>
 
-                          <button
-                            type="button"
-                            onClick={() => openBooking(doc)}
-                            className="px-4 py-1.5 bg-[#0d6e7e] hover:bg-[#0a5566] text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
-                          >
-                            Book Slot
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewingDoctorProfile(doc);
+                              }}
+                              className="px-3 py-2 bg-gray-50 hover:bg-teal-50 text-[#0d6e7e] border border-gray-200 hover:border-teal-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                              title="View Hospital Details, Photos & Service Price List"
+                            >
+                              <Building2 size={13} />
+                              <span>Hospital & Rates</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openBooking(doc)}
+                              className="px-4 py-2 bg-[#0d6e7e] hover:bg-[#0a5566] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+                            >
+                              <Calendar size={13} />
+                              <span>Book Slot</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))

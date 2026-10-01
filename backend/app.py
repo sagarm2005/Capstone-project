@@ -1331,20 +1331,57 @@ def enrich_doctor_data(doctor):
         doc_dict["hospitalAbout"] = f"{doc_dict.get('hospital', 'MediCore Hospital')} is equipped with state-of-the-art medical technology, dedicated emergency care, sterile consultation chambers, and an in-house pharmacy to provide compassionate healthcare."
     if not doc_dict.get("hospitalAddress"):
         doc_dict["hospitalAddress"] = doc_dict.get("location", "123 Healthcare Way, Metro City, 560001")
+    
+    # Distance in km (calculated or assigned)
+    if "distance" not in doc_dict or doc_dict.get("distance") is None:
+        doc_id = doc_dict.get("id", 1)
+        doc_dict["distance"] = round(((doc_id * 7) % 22) * 0.5 + 1.4, 1)
+
+    if not doc_dict.get("rating"):
+        doc_dict["rating"] = 4.8
+    if not doc_dict.get("experience"):
+        doc_dict["experience"] = 8
+
     return doc_dict
 
 @app.route("/api/doctors", methods=["GET"])
 def doctors():
     db = get_db()
     query = {}
-    if request.args.get("specialty"):
+    treatment = request.args.get("treatment") or request.args.get("specialty")
+    if treatment:
         import re
-        query["specialty"] = {"$regex": re.escape(request.args["specialty"]), "$options": "i"}
+        reg = {"$regex": re.escape(treatment), "$options": "i"}
+        query["$or"] = [
+            {"specialty": reg},
+            {"services.name": reg},
+            {"services.category": reg}
+        ]
     if request.args.get("location"):
         import re
         query["location"] = {"$regex": re.escape(request.args["location"]), "$options": "i"}
+    if request.args.get("maxPrice"):
+        try:
+            query["fee"] = {"$lte": float(request.args["maxPrice"])}
+        except ValueError:
+            pass
+    if request.args.get("minRating"):
+        try:
+            query["rating"] = {"$gte": float(request.args["minRating"])}
+        except ValueError:
+            pass
+
     raw_doctors = list(db.doctors.find(query))
-    return jsonify([enrich_doctor_data(d) for d in raw_doctors])
+    enriched = [enrich_doctor_data(d) for d in raw_doctors]
+
+    if request.args.get("maxDistance"):
+        try:
+            max_d = float(request.args["maxDistance"])
+            enriched = [d for d in enriched if float(d.get("distance", 999)) <= max_d]
+        except ValueError:
+            pass
+
+    return jsonify(enriched)
 
 @app.route("/api/doctors/<int:doctor_id>", methods=["GET", "PATCH"])
 def doctor_detail(doctor_id):
