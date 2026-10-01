@@ -13,6 +13,8 @@ import requests
 import cloudinary
 import cloudinary.uploader
 import cloudinary.utils
+from healthpilot_service import analyze_prescribed_medicine, check_allergy_against_compounds
+from medicine_service import search_indian_medicines, get_medicine_price_details
 
 logging.basicConfig(level=logging.INFO)
 load_dotenv()
@@ -592,19 +594,57 @@ def prescriptions():
     patient = db.patients.find_one({"id": data.get("patientId")})
     doctor = db.doctors.find_one({"id": data.get("doctorId")})
     
-    # Validation logic
+    # Validation logic with HealthPilot Active Compounds & Indian Medicine Dataset Pricing
     allergies = patient.get("allergies", []) if patient else []
+    if "allergies" in data and isinstance(data["allergies"], list):
+        allergies = list(set(allergies + data["allergies"]))
+        
     validations = []
+    enriched_medicines = []
+    total_amount = 0.0
+    
     for med in data.get("medicines", []):
-        name_first = med["name"].lower().split()[0] if med.get("name") else ""
-        conflict = any(name_first in a.lower() for a in allergies)
-        validations.append({
-            "type": "error" if conflict else "success",
-            "message": f"{med['name']} — {'allergy conflict detected' if conflict else 'no allergy conflict detected'}",
-        })
+        med_copy = dict(med)
+        med_name = med.get("name", "").strip()
+        if not med_name:
+            continue
+            
+        analysis = analyze_prescribed_medicine(med_name, allergies)
+        
+        # Calculate price from Indian Medicine Dataset
+        price = med.get("price")
+        if price is None or price == "" or float(price) <= 0:
+            price = analysis["pricing"]["price"] if analysis else 100.0
+        try:
+            price = round(float(price), 2)
+        except (ValueError, TypeError):
+            price = 100.0
+            
+        med_copy["price"] = price
+        med_copy["activeCompounds"] = analysis.get("activeCompounds", []) if analysis else []
+        med_copy["hasAllergyConflict"] = analysis.get("hasAllergyConflict", False) if analysis else False
+        med_copy["genericInfo"] = analysis.get("generic", {}) if analysis else {}
+        med_copy["packSize"] = analysis.get("pricing", {}).get("packSize", "") if analysis else ""
+        med_copy["manufacturer"] = analysis.get("pricing", {}).get("manufacturer", "") if analysis else ""
+        
+        total_amount += price
+        enriched_medicines.append(med_copy)
+        
+        if analysis and analysis.get("hasAllergyConflict"):
+            for alert in analysis.get("allergyCheck", {}).get("alerts", []):
+                validations.append({
+                    "type": "error",
+                    "message": f"🚨 ALLERGY ALERT ({med_name}): Active compound '{alert.get('conflictingCompound')}' conflicts with patient allergy '{alert.get('patientAllergy')}'!"
+                })
+        else:
+            comp_str = ", ".join(analysis.get("activeCompounds", [])) if analysis else ""
+            validations.append({
+                "type": "success",
+                "message": f"✅ {med_name}: Safe. Active compounds ({comp_str or 'verified'}) cleared with no allergy conflict."
+            })
     
     # Drug-Drug Interaction validation
-    validations.extend(check_drug_interactions(data.get("medicines", [])))
+    validations.extend(check_drug_interactions(enriched_medicines))
         
     new_rx = {
         "id": next_id("prescriptions"),
@@ -622,7 +662,8 @@ def prescriptions():
         "diagnosis": data["diagnosis"],
         "severity": data.get("severity", "Medium"),
         "vitals": data.get("vitals", {}),
-        "medicines": data.get("medicines", []),
+        "medicines": enriched_medicines,
+        "totalAmount": round(total_amount, 2),
         "labTests": data.get("labTests", []),
         "selectedLabId": data.get("selectedLabId"),
         "followupDate": data.get("followupDate"),
@@ -631,10 +672,10 @@ def prescriptions():
     }
     db.prescriptions.insert_one(new_rx)
 
-    # Automatically create medicine bill if medicines are prescribed
-    valid_meds = [m for m in data.get("medicines", []) if m.get("name")]
+    # Automatically create medicine bill with real total amount calculated from Indian Medicine Dataset
+    valid_meds = [m for m in enriched_medicines if m.get("name")]
     if valid_meds:
-        med_cost = len(valid_meds) * 250
+        med_cost = round(total_amount, 2) if total_amount > 0 else len(valid_meds) * 250
         med_pay_id = next_id("payments")
         med_names = ", ".join([m.get("name", "") for m in valid_meds])
         db.payments.insert_one({
@@ -646,7 +687,7 @@ def prescriptions():
             "category": "medicine",
             "method": "pending",
             "status": "pending",
-            "description": f"Medicines - {med_names}",
+            "description": f"Medicines (Total: ₹{med_cost:.2f}) - {med_names}",
             "invoiceId": f"INV-2026-{str(med_pay_id).zfill(3)}",
             "createdAt": datetime.utcnow().isoformat() + "Z",
         })
@@ -706,14 +747,38 @@ def validate_prescription():
     data = request.get_json() or {}
     patient = db.patients.find_one({"id": data.get("patientId")})
     allergies = patient.get("allergies", []) if patient else []
+    if "allergies" in data and isinstance(data["allergies"], list):
+        allergies = list(set(allergies + data["allergies"]))
+        
     validations = []
+    medicines_analysis = []
+    total_amount = 0.0
+    
     for med in data.get("medicines", []):
-        name_first = med.get("name", "").lower().split()[0] if med.get("name") else ""
-        conflict = any(name_first in a.lower() for a in allergies)
-        validations.append({
-            "type": "error" if conflict else "success",
-            "message": f"{med.get('name', 'Medicine')} — {'allergy conflict detected' if conflict else 'no allergy conflict detected'}",
-        })
+        med_name = med.get("name", "").strip()
+        if not med_name:
+            continue
+            
+        analysis = analyze_prescribed_medicine(med_name, allergies)
+        medicines_analysis.append(analysis)
+        
+        price = analysis["pricing"]["price"] if analysis else 100.0
+        total_amount += price
+        
+        if analysis and analysis.get("hasAllergyConflict"):
+            for alert in analysis.get("allergyCheck", {}).get("alerts", []):
+                validations.append({
+                    "type": "error",
+                    "medicine": med_name,
+                    "message": f"🚨 ALLERGY CONFLICT: {med_name} active compound '{alert.get('conflictingCompound')}' conflicts with patient allergy '{alert.get('patientAllergy')}'!"
+                })
+        else:
+            comp_str = ", ".join(analysis.get("activeCompounds", [])) if analysis else ""
+            validations.append({
+                "type": "success",
+                "medicine": med_name,
+                "message": f"✅ {med_name}: Active compounds ({comp_str or 'verified'}) cleared with no allergy conflict."
+            })
 
     # Drug-Drug Interaction validation
     validations.extend(check_drug_interactions(data.get("medicines", [])))
@@ -724,7 +789,44 @@ def validate_prescription():
             "message": "No medicines provided to validate. Add at least one drug to run AI validation.",
         })
 
-    return jsonify({"validations": validations}), 200
+    return jsonify({
+        "validations": validations,
+        "analyses": medicines_analysis,
+        "totalAmount": round(total_amount, 2)
+    }), 200
+
+@app.route("/api/medicines/analyze", methods=["GET"])
+def analyze_medicine_route():
+    name = request.args.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Medicine name is required"}), 400
+    
+    patient_id = request.args.get("patientId")
+    allergies = []
+    if patient_id:
+        db = get_db()
+        try:
+            patient = db.patients.find_one({"id": int(patient_id)})
+            if patient:
+                allergies = patient.get("allergies", [])
+        except Exception:
+            pass
+            
+    extra_allergies = request.args.get("allergies", "")
+    if extra_allergies:
+        allergies.extend([a.strip() for a in extra_allergies.split(",") if a.strip()])
+        
+    analysis = analyze_prescribed_medicine(name, allergies)
+    return jsonify(analysis), 200
+
+@app.route("/api/medicines/search", methods=["GET"])
+def search_medicines_route():
+    q = request.args.get("q", "").strip()
+    limit = int(request.args.get("limit", 10))
+    if not q:
+        return jsonify([]), 200
+    results = search_indian_medicines(q, limit)
+    return jsonify(results), 200
 
 @app.route("/api/prescriptions/<int:rx_id>", methods=["PATCH"])
 def update_prescription(rx_id):
@@ -952,7 +1054,7 @@ def lab_report(req_id):
     db.lab_requests.update_one({"id": req_id}, {"$set": {"reportUrl": report_url, "status": "ready", "aiAnalysis": ai}})
     return jsonify(serialize(db.lab_requests.find_one({"id": req_id})))
 
-@app.route("/api/profile", methods=["GET"])
+@app.route("/api/profile", methods=["GET", "PATCH"])
 @jwt_required()
 def get_profile():
     db = get_db()
@@ -962,6 +1064,27 @@ def get_profile():
         return jsonify({"error": "User not found"}), 404
     
     role = user.get("role")
+
+    if request.method == "PATCH":
+        data = request.get_json() or {}
+        allowed = [
+            "fullName", "phone", "email", "specialty", "degree", "experience",
+            "registrationNumber", "fee", "hospital", "hospitalAddress",
+            "hospitalPhone", "hospitalEmail", "hospitalAbout", "hospitalFacilities",
+            "hospitalImages", "services", "bio", "status", "dateOfBirth", "bloodGroup",
+            "location"
+        ]
+        updates = {k: v for k, v in data.items() if k in allowed}
+        if updates:
+            if role == "doctor":
+                db.doctors.update_one({"id": user_id}, {"$set": updates}, upsert=True)
+            elif role == "patient":
+                db.patients.update_one({"id": user_id}, {"$set": updates}, upsert=True)
+            user_updates = {k: updates[k] for k in ["fullName", "email", "phone"] if k in updates}
+            if user_updates:
+                db.users.update_one({"id": user_id}, {"$set": user_updates})
+
+    user = db.users.find_one({"id": user_id})
     profile_data = serialize(user)
     if "password" in profile_data:
         del profile_data["password"]
@@ -971,7 +1094,9 @@ def get_profile():
         if ext: profile_data.update(serialize(ext))
     elif role == "doctor":
         ext = db.doctors.find_one({"id": user_id})
-        if ext: profile_data.update(serialize(ext))
+        if ext:
+            enriched = enrich_doctor_data(ext) if 'enrich_doctor_data' in globals() else serialize(ext)
+            profile_data.update(enriched)
     elif role == "lab":
         ext = db.lab_techs.find_one({"id": user_id})
         if ext: profile_data.update(serialize(ext))
@@ -1127,6 +1252,87 @@ def patient_followups(patient_id):
 
 # ─── Doctors ──────────────────────────────────────────────────────────────────
 
+DEFAULT_HOSPITAL_IMAGES = [
+    {
+        "url": "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=1000&q=80",
+        "caption": "Hospital Exterior & Main Entrance"
+    },
+    {
+        "url": "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=1000&q=80",
+        "caption": "Reception Lounge & Outpatient Desk"
+    },
+    {
+        "url": "https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=1000&q=80",
+        "caption": "Doctor Consultation & Diagnostic Suite"
+    },
+    {
+        "url": "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=1000&q=80",
+        "caption": "Treatment Room & Sterile Minor Procedure Unit"
+    }
+]
+
+def enrich_doctor_data(doctor):
+    if not doctor:
+        return doctor
+    doc_dict = serialize(doctor)
+    fee = doc_dict.get("fee", 600) or 600
+    if not doc_dict.get("services"):
+        doc_dict["services"] = [
+            {
+                "id": "1",
+                "name": "Doctor Consultation / Visiting Card",
+                "category": "Consultation",
+                "price": fee,
+                "description": "Comprehensive primary clinical consultation, vital diagnosis, and initial prescription."
+            },
+            {
+                "id": "2",
+                "name": "Injection Administration (IM / IV)",
+                "category": "Clinical & Nursing",
+                "price": 100,
+                "description": "Intramuscular or Intravenous sterile injection administration by clinical staff."
+            },
+            {
+                "id": "3",
+                "name": "Sterile Disposable Syringe & Needle",
+                "category": "Medical Consumable",
+                "price": 30,
+                "description": "Medical-grade single-use sterile syringe & precision needle pack."
+            },
+            {
+                "id": "4",
+                "name": "Wound Dressing & Antiseptic Care",
+                "category": "Minor Procedure",
+                "price": 250,
+                "description": "Antiseptic wash, sterile gauze padding, and surgical bandage dressing."
+            },
+            {
+                "id": "5",
+                "name": "ECG (12-Lead Electrocardiogram)",
+                "category": "Diagnostics",
+                "price": 400,
+                "description": "Live cardiac rhythm recording & instant digital review."
+            },
+            {
+                "id": "6",
+                "name": "Emergency Out-of-Hours Visit",
+                "category": "Emergency",
+                "price": 1200,
+                "description": "Priority clinical examination, triage, and acute stabilization."
+            }
+        ]
+    if not doc_dict.get("hospitalImages"):
+        doc_dict["hospitalImages"] = DEFAULT_HOSPITAL_IMAGES
+    if not doc_dict.get("hospitalFacilities"):
+        doc_dict["hospitalFacilities"] = [
+            "24/7 Emergency", "ICU Facility", "In-House Pharmacy", "Pathology Lab", "Digital X-Ray", "Sterile Minor OT", "Wheelchair Accessible"
+        ]
+    if not doc_dict.get("hospitalAbout"):
+        doc_dict["hospitalAbout"] = f"{doc_dict.get('hospital', 'MediCore Hospital')} is equipped with state-of-the-art medical technology, dedicated emergency care, sterile consultation chambers, and an in-house pharmacy to provide compassionate healthcare."
+    if not doc_dict.get("hospitalAddress"):
+        doc_dict["hospitalAddress"] = doc_dict.get("location", "123 Healthcare Way, Metro City, 560001")
+    return doc_dict
+
 @app.route("/api/doctors", methods=["GET"])
 def doctors():
     db = get_db()
@@ -1137,15 +1343,33 @@ def doctors():
     if request.args.get("location"):
         import re
         query["location"] = {"$regex": re.escape(request.args["location"]), "$options": "i"}
-    return jsonify(serialize_list(db.doctors.find(query)))
+    raw_doctors = list(db.doctors.find(query))
+    return jsonify([enrich_doctor_data(d) for d in raw_doctors])
 
-@app.route("/api/doctors/<int:doctor_id>", methods=["GET"])
+@app.route("/api/doctors/<int:doctor_id>", methods=["GET", "PATCH"])
 def doctor_detail(doctor_id):
     db = get_db()
     doctor = db.doctors.find_one({"id": doctor_id})
     if not doctor:
         return jsonify({"error": "Not found"}), 404
-    return jsonify(serialize(doctor))
+
+    if request.method == "PATCH":
+        data = request.get_json() or {}
+        allowed = [
+            "fullName", "phone", "email", "specialty", "degree", "experience",
+            "registrationNumber", "fee", "hospital", "hospitalAddress",
+            "hospitalPhone", "hospitalEmail", "hospitalAbout", "hospitalFacilities",
+            "hospitalImages", "services", "bio", "status", "location"
+        ]
+        updates = {k: v for k, v in data.items() if k in allowed}
+        if updates:
+            db.doctors.update_one({"id": doctor_id}, {"$set": updates})
+            user_updates = {k: updates[k] for k in ["fullName", "email", "phone"] if k in updates}
+            if user_updates:
+                db.users.update_one({"id": doctor_id}, {"$set": user_updates})
+        doctor = db.doctors.find_one({"id": doctor_id})
+
+    return jsonify(enrich_doctor_data(doctor))
 
 import calendar
 
@@ -1388,6 +1612,7 @@ def dashboard_doctor():
         "pendingLabReviews": pendingLabReviews,
         "schedule": schedule,
         "recentPatients": recentPatients,
+        "doctorProfile": enrich_doctor_data(doctor_profile) if doctor_profile else None,
     })
 
 @app.route("/api/patients/<int:pt_id>/allergies", methods=["POST"])

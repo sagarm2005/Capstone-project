@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { Calendar, FileText, FlaskConical, Bell, Users, Activity, AlertTriangle, Clock, ChevronRight, Stethoscope, Building2, X, Brain, Droplet, TrendingUp, Plus, Minus, User, Syringe, ShieldCheck, ClipboardCheck, Receipt, Pill } from "lucide-react";
+import { Calendar, FileText, FlaskConical, Bell, Users, Activity, AlertTriangle, Clock, ChevronRight, Stethoscope, Building2, X, Brain, Droplet, TrendingUp, Plus, Minus, User, Syringe, ShieldCheck, ClipboardCheck, Receipt, Pill, MapPin, Phone, Camera, Image as ImageIcon } from "lucide-react";
 import { Link } from "wouter";
+import PrescriptionModal from "@/components/PrescriptionModal";
+import DoctorHospitalProfileModal from "@/components/DoctorHospitalProfileModal";
 
 function StatCard({ icon, label, value, color, trend }) {
   return (
@@ -593,6 +595,35 @@ function DoctorDashboard({ data }) {
   const [bloodBanks, setBloodBanks] = useState([]);
   const [allergyTarget, setAllergyTarget] = useState(null);
   const [doctorNewAllergy, setDoctorNewAllergy] = useState("");
+  const [showPrescribeModal, setShowPrescribeModal] = useState(false);
+  const [prescribeTargetPatient, setPrescribeTargetPatient] = useState(null);
+  const [prescribeApptId, setPrescribeApptId] = useState(null);
+  const [showHospitalModal, setShowHospitalModal] = useState(false);
+  const [doctorProfile, setDoctorProfile] = useState(data?.doctorProfile || null);
+
+  const fetchDoctorProfile = () => {
+    if (user?.id) {
+      api.get(`/doctors/${user.id}`).then(setDoctorProfile).catch(console.error);
+    }
+  };
+
+  const handleOpenPrescribeForAppt = (appt) => {
+    setPrescribeTargetPatient(appt.patientId || null);
+    setPrescribeApptId(appt.id || null);
+    setShowPrescribeModal(true);
+  };
+
+  const handleOpenPrescribeForPatient = (patient) => {
+    setPrescribeTargetPatient(patient.id || null);
+    setPrescribeApptId(null);
+    setShowPrescribeModal(true);
+  };
+
+  const handleOpenNewPrescription = () => {
+    setPrescribeTargetPatient(null);
+    setPrescribeApptId(null);
+    setShowPrescribeModal(true);
+  };
 
   const handleDoctorAddAllergy = async () => {
     if (!doctorNewAllergy.trim() || !allergyTarget) return;
@@ -612,16 +643,171 @@ function DoctorDashboard({ data }) {
 
   useEffect(() => {
     fetchBloodBanks();
-  }, []);
+    if (user?.id) {
+      fetchDoctorProfile();
+    }
+  }, [user?.id]);
 
   return (
     <div className="space-y-6">
+      {/* Doctor Prescription Action Header Banner */}
+      <div className="bg-gradient-to-r from-teal-800 via-[#0d6e7e] to-teal-700 rounded-2xl p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm border border-teal-700/50">
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <Stethoscope size={22} className="text-teal-200" /> Clinical Dashboard · Dr. {user?.fullName || "Doctor"}
+          </h2>
+          <p className="text-xs text-teal-100 font-medium">
+            AI-powered prescribing with HealthPilot.ai active compound allergy detection, generic drug suggestions, and Indian Medicine Dataset live pricing.
+          </p>
+        </div>
+        <button
+          onClick={handleOpenNewPrescription}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-[#0d6e7e] rounded-xl text-xs font-black hover:bg-teal-50 hover:shadow-lg transition-all shadow-md shrink-0 self-start sm:self-auto uppercase tracking-wider"
+        >
+          <Pill size={16} /> Prescribe Medicine
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard icon={<Calendar size={20} className="text-blue-600" />} label="Today's Appointments" value={data?.todayAppointments ?? 0} color="bg-blue-50" />
         <StatCard icon={<Users size={20} className="text-green-600" />} label="Active Patients" value={data?.activePatients ?? 0} color="bg-green-50" />
         <StatCard icon={<FileText size={20} className="text-purple-600" />} label="Pending Prescriptions" value={data?.pendingPrescriptions ?? 0} color="bg-purple-50" />
         <StatCard icon={<FlaskConical size={20} className="text-amber-600" />} label="Lab Reviews" value={data?.pendingLabReviews ?? 0} color="bg-amber-50" />
         <StatCard icon={<Syringe size={20} className="text-teal-600" />} label="Vaccinations Given" value={data?.prescriptionsToday || 0} color="bg-teal-50" />
+      </div>
+
+      {/* Hospital Profile, Photos & Clinical Services Rate Card Widget */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-[#0d6e7e] shrink-0 shadow-xs">
+              <Building2 size={28} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-50 text-[#0d6e7e] border border-teal-100">
+                  Hospital & Practice Profile
+                </span>
+                <span className="text-xs text-gray-400">• Visible to booking patients</span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mt-1 flex items-center gap-2">
+                {doctorProfile?.hospital || "Hospital & Clinical Practice"}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="flex items-center gap-1">
+                  <MapPin size={12} className="text-red-500 shrink-0" />
+                  <span>{doctorProfile?.hospitalAddress || doctorProfile?.location || "Hospital Address not set"}</span>
+                </span>
+                {doctorProfile?.hospitalPhone && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <Phone size={12} className="text-green-600 shrink-0" />
+                      <span>{doctorProfile?.hospitalPhone}</span>
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+            <button
+              onClick={() => setShowHospitalModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0d6e7e] text-white rounded-xl text-xs font-bold hover:bg-[#0a5566] transition-all shadow-xs"
+            >
+              <Building2 size={15} /> Manage Hospital & Rates
+            </button>
+          </div>
+        </div>
+
+        {/* Hospital Photos Thumbnails & Services Rate Strip */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1">
+          {/* Left: Hospital Photos Preview */}
+          <div className="lg:col-span-6 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5 uppercase tracking-wider">
+                <ImageIcon size={14} className="text-[#0d6e7e]" /> Hospital Photos ({doctorProfile?.hospitalImages?.length || 0})
+              </span>
+              <button
+                onClick={() => setShowHospitalModal(true)}
+                className="text-xs text-[#0d6e7e] font-semibold hover:underline flex items-center gap-1"
+              >
+                <Camera size={12} /> Add / Edit Photos
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {(doctorProfile?.hospitalImages || []).slice(0, 3).map((img, idx) => (
+                <div key={idx} className="relative h-24 rounded-xl overflow-hidden border border-gray-200 group bg-gray-100">
+                  <img src={img.url} alt={img.title || "Hospital"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-1 text-[10px] text-white font-medium truncate">
+                    {img.title || `Photo ${idx + 1}`}
+                  </div>
+                </div>
+              ))}
+              {(!doctorProfile?.hospitalImages || doctorProfile.hospitalImages.length === 0) && (
+                <div
+                  onClick={() => setShowHospitalModal(true)}
+                  className="col-span-3 h-24 rounded-xl border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center cursor-pointer hover:border-teal-400 text-gray-400 gap-1"
+                >
+                  <Camera size={20} />
+                  <span className="text-xs font-medium">Upload hospital photos for patients</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Quick Rate Card summary */}
+          <div className="lg:col-span-6 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5 uppercase tracking-wider">
+                <Syringe size={14} className="text-[#0d6e7e]" /> Service Price List ({doctorProfile?.services?.length || 0} items)
+              </span>
+              <button
+                onClick={() => setShowHospitalModal(true)}
+                className="text-xs text-[#0d6e7e] font-semibold hover:underline flex items-center gap-1"
+              >
+                Update Rates
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-teal-50/60 border border-teal-100 flex items-center justify-between">
+                <div className="min-w-0 pr-1">
+                  <p className="font-bold text-gray-900 truncate">Visiting / OPD Card</p>
+                  <p className="text-[10px] text-gray-500">Standard fee</p>
+                </div>
+                <span className="font-black text-sm text-[#0d6e7e] shrink-0">₹{doctorProfile?.fee || user?.fee || 500}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between">
+                <div className="min-w-0 pr-1">
+                  <p className="font-bold text-gray-900 truncate">Injection Fee</p>
+                  <p className="text-[10px] text-gray-500">IM / IV</p>
+                </div>
+                <span className="font-bold text-sm text-gray-800 shrink-0">
+                  ₹{doctorProfile?.services?.find(s => s.name?.toLowerCase().includes("injection"))?.price || 100}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between">
+                <div className="min-w-0 pr-1">
+                  <p className="font-bold text-gray-900 truncate">Disposable Syringe</p>
+                  <p className="text-[10px] text-gray-500">Sterile single-use</p>
+                </div>
+                <span className="font-bold text-sm text-gray-800 shrink-0">
+                  ₹{doctorProfile?.services?.find(s => s.name?.toLowerCase().includes("syringe"))?.price || 30}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between">
+                <div className="min-w-0 pr-1">
+                  <p className="font-bold text-gray-900 truncate">Wound Dressing</p>
+                  <p className="text-[10px] text-gray-500">Antiseptic care</p>
+                </div>
+                <span className="font-bold text-sm text-gray-800 shrink-0">
+                  ₹{doctorProfile?.services?.find(s => s.name?.toLowerCase().includes("dressing"))?.price || 250}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -751,10 +937,19 @@ function DoctorDashboard({ data }) {
                 <p className="text-xs text-gray-500 capitalize">{appt.type} visit</p>
                 {appt.notes && <p className="text-[10px] text-teal-600 mt-1 font-medium italic truncate">Symptoms: {appt.notes}</p>}
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                appt.status === "confirmed" ? "bg-green-100 text-green-700" :
-                appt.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"
-              }`}>{appt.status}</span>
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  appt.status === "confirmed" ? "bg-green-100 text-green-700" :
+                  appt.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"
+                }`}>{appt.status}</span>
+                <button
+                  onClick={() => handleOpenPrescribeForAppt(appt)}
+                  className="px-2.5 py-1 bg-[#0d6e7e] text-white rounded-lg text-xs font-bold hover:bg-[#0a5566] transition-colors flex items-center gap-1 shadow-xs"
+                  title="Prescribe Medicine"
+                >
+                  <Pill size={12} /> Prescribe
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -775,12 +970,19 @@ function DoctorDashboard({ data }) {
                 <p className="text-xs text-gray-500">{p.condition}</p>
                 {p.symptoms && <p className="text-[10px] text-teal-600 mt-1 font-medium italic truncate">Symptoms: {p.symptoms}</p>}
               </div>
-              <div className="flex items-center gap-3">
-                <p className="text-xs text-gray-400">{p.lastVisit}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-400 mr-1">{p.lastVisit}</p>
+                <button 
+                  onClick={() => handleOpenPrescribeForPatient(p)}
+                  className="px-2 py-1 bg-teal-50 text-[#0d6e7e] hover:bg-teal-100 rounded-lg border border-teal-100 transition-all text-xs font-bold flex items-center gap-1"
+                  title="Prescribe Medicine"
+                >
+                  <Pill size={12} /> Prescribe
+                </button>
                 <button 
                   onClick={() => setAllergyTarget(p)}
-                  className="p-1.5 text-[#0d6e7e] hover:bg-teal-50 rounded-lg border border-transparent hover:border-teal-100 transition-all"
-                  title="Add Allergy"
+                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-all"
+                  title="Add Known Allergy"
                 >
                   <AlertTriangle size={14} />
                 </button>
@@ -849,6 +1051,31 @@ function DoctorDashboard({ data }) {
           </button>
         </div>
       </div>
+      )}
+
+      {/* Doctor Prescription Console Modal */}
+      <PrescriptionModal
+        isOpen={showPrescribeModal}
+        onClose={() => setShowPrescribeModal(false)}
+        initialPatientId={prescribeTargetPatient}
+        appointmentId={prescribeApptId}
+        doctor={user}
+        onPrescriptionCreated={() => {
+          // Can refresh or alert
+        }}
+      />
+
+      {/* Doctor Hospital Profile & Rate Card Editor Modal */}
+      {showHospitalModal && (
+        <DoctorHospitalProfileModal
+          isOpen={showHospitalModal}
+          onClose={() => setShowHospitalModal(false)}
+          initialDoctorId={user?.id}
+          onProfileUpdated={(updated) => {
+            setDoctorProfile(updated);
+            fetchDoctorProfile();
+          }}
+        />
       )}
     </div>
   );

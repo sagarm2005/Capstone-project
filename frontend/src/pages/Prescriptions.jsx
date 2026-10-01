@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import { jsPDF } from "jspdf";
 import { api } from "@/lib/api";
+import PrescriptionModal from "@/components/PrescriptionModal";
 import { FileText, Plus, X, CheckCircle, AlertTriangle, XCircle, Printer, Download, Mail, Phone, MapPin } from "lucide-react";
 
 function ValidationIcon({ type }) {
@@ -317,21 +318,42 @@ export default function Prescriptions() {
                         <th className="px-4 py-3 font-bold text-gray-500 text-[10px] uppercase">Drug Name</th>
                         <th className="px-4 py-3 font-bold text-gray-500 text-[10px] uppercase text-center">Dosage</th>
                         <th className="px-4 py-3 font-bold text-gray-500 text-[10px] uppercase text-center">Freq / Duration</th>
+                        <th className="px-4 py-3 font-bold text-gray-500 text-[10px] uppercase text-right">Dataset Price</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
                       {selected.medicines?.map((med, i) => (
                         <tr key={i}>
-                          <td className="px-4 py-4 font-black text-gray-900">{med.name}</td>
+                          <td className="px-4 py-4 font-black text-gray-900">
+                            <div>{med.name}</div>
+                            {med.activeCompounds?.length > 0 && (
+                              <div className="text-[10px] text-teal-700 font-semibold mt-0.5">
+                                Active: {med.activeCompounds.join(", ")}
+                              </div>
+                            )}
+                          </td>
                           <td className="px-4 py-4 text-center text-teal-700 font-black tracking-tight">{med.dosage}</td>
                           <td className="px-4 py-4 text-center">
                             <span className="text-gray-500">{med.frequency}</span>
                             <span className="mx-2 text-gray-300">|</span>
                             <span className="text-gray-900 font-bold italic">{med.duration}</span>
                           </td>
+                          <td className="px-4 py-4 text-right font-black text-gray-900">
+                            ₹{(med.price || 0).toFixed(2)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot className="bg-gray-50 font-black border-t-2 border-gray-200">
+                      <tr>
+                        <td colSpan={3} className="px-4 py-3 text-right text-xs uppercase tracking-wider text-gray-600">
+                          Total Prescription Amount (Indian Medicine Dataset):
+                        </td>
+                        <td className="px-4 py-3 text-right text-base font-black text-teal-800">
+                          ₹{(selected.totalAmount || selected.medicines?.reduce((s, m) => s + (m.price || 0), 0) || 0).toFixed(2)}
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>
@@ -393,74 +415,15 @@ export default function Prescriptions() {
       )}
 
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-lg font-semibold text-gray-800">New Prescription</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              {attachedReport && (
-                <div className="flex items-center gap-3 rounded-lg border border-teal-100 bg-teal-50 p-3">
-                  <FileText size={18} className="text-teal-700 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-teal-900">Model report attached</p>
-                    <p className="text-xs text-teal-700 truncate">{attachedReport.fileName} · {attachedReport.result.prediction} ({Math.round(attachedReport.result.confidence * 100)}%)</p>
-                  </div>
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Patient</label>
-                <select value={form.patientId} onChange={(e) => setForm({ ...form, patientId: Number(e.target.value) })} required
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                  <option value={0}>Select patient</option>
-                  {patients.map((p) => <option key={p.id} value={p.id}>{p.fullName}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Diagnosis</label>
-                <input value={form.diagnosis} onChange={(e) => setForm({ ...form, diagnosis: e.target.value })} required
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  placeholder="Primary diagnosis" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium text-gray-700">Medicines</label>
-                  <button type="button" onClick={addMedicine} className="text-xs text-[#0d6e7e] hover:underline">+ Add</button>
-                </div>
-                <div className="space-y-2">
-                  {form.medicines.map((med, i) => (
-                    <div key={i} className="grid grid-cols-2 gap-2">
-                      <input placeholder="Drug name" value={med.name} onChange={(e) => updateMed(i, "name", e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                      <input placeholder="Dosage (e.g. 500mg)" value={med.dosage} onChange={(e) => updateMed(i, "dosage", e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                      <input placeholder="Frequency" value={med.frequency} onChange={(e) => updateMed(i, "frequency", e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                      <input placeholder="Duration (e.g. 7 days)" value={med.duration} onChange={(e) => updateMed(i, "duration", e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Lab Tests (comma separated)</label>
-                <input value={form.labTests} onChange={(e) => setForm({ ...form, labTests: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  placeholder="HbA1c, CBC, Lipid Panel" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Follow-up Date</label>
-                <input type="date" value={form.followupDate} onChange={(e) => setForm({ ...form, followupDate: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-              </div>
-              <button type="submit" disabled={loading}
-                className="w-full py-2.5 bg-[#0d6e7e] text-white rounded-lg font-medium text-sm hover:bg-[#0a5566] disabled:opacity-60">
-                {loading ? "Saving..." : "Create Prescription (AI will validate)"}
-              </button>
-            </form>
-          </div>
-        </div>
+        <PrescriptionModal
+          isOpen={showCreate}
+          onClose={() => setShowCreate(false)}
+          doctor={user}
+          onPrescriptionCreated={() => {
+            fetchRx();
+            setShowCreate(false);
+          }}
+        />
       )}
     </div>
   );
