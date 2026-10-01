@@ -13,7 +13,8 @@ import {
   Droplet,
   Settings,
   LogOut,
-  Sparkles
+  Sparkles,
+  Receipt
 } from "lucide-react";
 
 const MENU_ITEMS = [
@@ -27,6 +28,7 @@ const MENU_ITEMS = [
   { path: "/chatbot", label: "AI Assistant", icon: Sparkles, roles: ["patient", "doctor"] },
   { path: "/disease", label: "Disease Monitor", icon: Activity, roles: ["admin", "superadmin"] },
   { path: "/payments", label: "Payments", icon: CreditCard, roles: ["patient", "admin"] },
+  { path: "/expenses", label: "Total Expense", icon: Receipt, roles: ["patient", "admin", "superadmin"] },
   { path: "/notifications", label: "Notifications", icon: Bell, roles: ["patient", "doctor", "lab", "admin", "blood_bank"] },
 ];
 

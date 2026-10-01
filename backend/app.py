@@ -90,6 +90,145 @@ def check_drug_interactions(medicines):
         })
     return validations
 
+def sync_patient_bills(patient_id):
+    db = get_db()
+    patient = db.patients.find_one({"id": patient_id})
+    patient_name = patient["fullName"] if patient else "Patient"
+
+    # 1. Sync appointments to bills/payments
+    appts = list(db.appointments.find({"patientId": patient_id}))
+    for appt in appts:
+        existing_payment = db.payments.find_one({"patientId": patient_id, "appointmentId": appt["id"]})
+        if not existing_payment:
+            fee = appt.get("fee", 600) or 600
+            pay_id = next_id("payments")
+            date_val = appt.get("date", "")
+            created_at = (date_val + "T10:00:00Z") if (isinstance(date_val, str) and len(date_val) == 10) else (datetime.utcnow().isoformat() + "Z")
+            db.payments.insert_one({
+                "id": pay_id,
+                "patientId": patient_id,
+                "patientName": patient_name,
+                "appointmentId": appt["id"],
+                "amount": fee,
+                "category": "consultation",
+                "method": "pending",
+                "status": "completed" if appt.get("status") == "completed" else "pending",
+                "description": f"Doctor Checkup - Dr. {appt.get('doctorName', 'Doctor')}",
+                "invoiceId": f"INV-2026-{str(pay_id).zfill(3)}",
+                "createdAt": created_at,
+            })
+
+    # 2. Sync prescriptions (medicines and lab tests) to bills/payments
+    rxs = list(db.prescriptions.find({"patientId": patient_id}))
+    for rx in rxs:
+        meds = [m for m in rx.get("medicines", []) if m.get("name")]
+        if meds and not db.payments.find_one({"patientId": patient_id, "prescriptionId": rx["id"], "category": "medicine"}):
+            med_cost = len(meds) * 250
+            pay_id = next_id("payments")
+            med_names = ", ".join([m.get("name", "") for m in meds])
+            db.payments.insert_one({
+                "id": pay_id,
+                "patientId": patient_id,
+                "patientName": patient_name,
+                "prescriptionId": rx["id"],
+                "amount": med_cost,
+                "category": "medicine",
+                "method": "pending",
+                "status": "pending",
+                "description": f"Medicines - {med_names}",
+                "invoiceId": f"INV-2026-{str(pay_id).zfill(3)}",
+                "createdAt": rx.get("createdAt", datetime.utcnow().isoformat() + "Z"),
+            })
+
+        lab_tests = rx.get("labTests", [])
+        if lab_tests and not db.payments.find_one({"patientId": patient_id, "prescriptionId": rx["id"], "category": "lab"}):
+            tests = lab_tests if isinstance(lab_tests, list) else [t.strip() for t in str(lab_tests).split(",") if t.strip()]
+            if tests:
+                lab_cost = len(tests) * 500
+                pay_id = next_id("payments")
+                db.payments.insert_one({
+                    "id": pay_id,
+                    "patientId": patient_id,
+                    "patientName": patient_name,
+                    "prescriptionId": rx["id"],
+                    "amount": lab_cost,
+                    "category": "lab",
+                    "method": "pending",
+                    "status": "pending",
+                    "description": f"Medical Report - {', '.join(tests)}",
+                    "invoiceId": f"INV-2026-{str(pay_id).zfill(3)}",
+                    "createdAt": rx.get("createdAt", datetime.utcnow().isoformat() + "Z"),
+                })
+
+    # 3. Sync standalone lab requests
+    labs = list(db.lab_requests.find({"patientId": patient_id}))
+    for lab in labs:
+        if not lab.get("prescriptionId") and not db.payments.find_one({"patientId": patient_id, "labRequestId": lab["id"]}):
+            pay_id = next_id("payments")
+            db.payments.insert_one({
+                "id": pay_id,
+                "patientId": patient_id,
+                "patientName": patient_name,
+                "labRequestId": lab["id"],
+                "amount": 500,
+                "category": "lab",
+                "method": "pending",
+                "status": "completed" if lab.get("status") == "ready" else "pending",
+                "description": f"Medical Report - {lab.get('testType', 'Lab Test')}",
+                "invoiceId": f"INV-2026-{str(pay_id).zfill(3)}",
+                "createdAt": lab.get("createdAt", datetime.utcnow().isoformat() + "Z"),
+            })
+
+def calculate_patient_expenses(patient_id):
+    sync_patient_bills(patient_id)
+    db = get_db()
+    payments = list(db.payments.find({"patientId": patient_id}).sort("createdAt", -1))
+
+    doctor_checkup_total = 0
+    medical_reports_total = 0
+    medicine_total = 0
+
+    doctor_checkup_items = []
+    medical_reports_items = []
+    medicine_items = []
+    all_items = []
+
+    for p in payments:
+        cat = (p.get("category") or "consultation").lower()
+        amt = int(p.get("amount", 0) or 0)
+        item = serialize(p)
+        all_items.append(item)
+
+        if cat in ["consultation", "emergency", "doctor_checkup"]:
+            doctor_checkup_total += amt
+            doctor_checkup_items.append(item)
+        elif cat in ["lab", "medical_reports", "report"]:
+            medical_reports_total += amt
+            medical_reports_items.append(item)
+        elif cat in ["medicine", "medicines", "pharmacy"]:
+            medicine_total += amt
+            medicine_items.append(item)
+        else:
+            doctor_checkup_total += amt
+            doctor_checkup_items.append(item)
+
+    total_expense = doctor_checkup_total + medical_reports_total + medicine_total
+
+    return {
+        "totalExpense": total_expense,
+        "doctorCheckupTotal": doctor_checkup_total,
+        "medicalReportsTotal": medical_reports_total,
+        "medicineTotal": medicine_total,
+        "doctorCheckupCount": len(doctor_checkup_items),
+        "medicalReportsCount": len(medical_reports_items),
+        "medicineCount": len(medicine_items),
+        "totalCount": len(all_items),
+        "items": all_items,
+        "doctorCheckupItems": doctor_checkup_items,
+        "medicalReportsItems": medical_reports_items,
+        "medicineItems": medicine_items,
+    }
+
 def current_user():
     db = get_db()
     user_id = int(get_jwt_identity())
@@ -396,14 +535,34 @@ def appointments():
     data = request.get_json()
     patient = db.patients.find_one({"id": data.get("patientId")})
     doctor = db.doctors.find_one({"id": data.get("doctorId")})
+    fee = doctor["fee"] if doctor and "fee" in doctor else 600
     new_appt = {
         "id": next_id("appointments"), "patientId": data["patientId"],
         "patientName": patient["fullName"] if patient else "",
         "doctorId": data["doctorId"], "doctorName": doctor["fullName"] if doctor else "",
         "date": data["date"], "time": data["time"], "type": data.get("type", "normal"),
-        "status": "pending", "fee": doctor["fee"] if doctor else 600, "notes": data.get("notes", ""),
+        "status": "pending", "fee": fee, "notes": data.get("notes", ""),
     }
     db.appointments.insert_one(new_appt)
+
+    # Automatically create a Doctor Checkup bill in db.payments
+    pay_id = next_id("payments")
+    date_val = data.get("date", "")
+    created_at = (date_val + "T10:00:00Z") if (isinstance(date_val, str) and len(date_val) == 10) else (datetime.utcnow().isoformat() + "Z")
+    db.payments.insert_one({
+        "id": pay_id,
+        "patientId": data["patientId"],
+        "patientName": patient["fullName"] if patient else "",
+        "appointmentId": new_appt["id"],
+        "amount": fee,
+        "category": "consultation",
+        "method": "pending",
+        "status": "pending",
+        "description": f"Doctor Checkup - Dr. {doctor['fullName'] if doctor else 'Doctor'}",
+        "invoiceId": f"INV-2026-{str(pay_id).zfill(3)}",
+        "createdAt": created_at,
+    })
+
     return jsonify(serialize(new_appt)), 201
 
 @app.route("/api/appointments/<int:appt_id>", methods=["GET", "PATCH"])
@@ -471,6 +630,48 @@ def prescriptions():
         "createdAt": datetime.utcnow().isoformat() + "Z"
     }
     db.prescriptions.insert_one(new_rx)
+
+    # Automatically create medicine bill if medicines are prescribed
+    valid_meds = [m for m in data.get("medicines", []) if m.get("name")]
+    if valid_meds:
+        med_cost = len(valid_meds) * 250
+        med_pay_id = next_id("payments")
+        med_names = ", ".join([m.get("name", "") for m in valid_meds])
+        db.payments.insert_one({
+            "id": med_pay_id,
+            "patientId": data["patientId"],
+            "patientName": patient["fullName"] if patient else "Unknown Patient",
+            "prescriptionId": new_rx["id"],
+            "amount": med_cost,
+            "category": "medicine",
+            "method": "pending",
+            "status": "pending",
+            "description": f"Medicines - {med_names}",
+            "invoiceId": f"INV-2026-{str(med_pay_id).zfill(3)}",
+            "createdAt": datetime.utcnow().isoformat() + "Z",
+        })
+
+    # Automatically create medical reports bill if lab tests are included
+    valid_tests = data.get("labTests", [])
+    if isinstance(valid_tests, str):
+        valid_tests = [t.strip() for t in valid_tests.split(",") if t.strip()]
+    if valid_tests:
+        lab_cost = len(valid_tests) * 500
+        lab_pay_id = next_id("payments")
+        test_names = ", ".join(valid_tests)
+        db.payments.insert_one({
+            "id": lab_pay_id,
+            "patientId": data["patientId"],
+            "patientName": patient["fullName"] if patient else "Unknown Patient",
+            "prescriptionId": new_rx["id"],
+            "amount": lab_cost,
+            "category": "lab",
+            "method": "pending",
+            "status": "pending",
+            "description": f"Medical Report - {test_names}",
+            "invoiceId": f"INV-2026-{str(lab_pay_id).zfill(3)}",
+            "createdAt": datetime.utcnow().isoformat() + "Z",
+        })
 
     # Automatically create lab request if lab is selected
     if data.get("selectedLabId") and data.get("labTests"):
@@ -659,6 +860,23 @@ def lab_requests():
         "createdAt": datetime.utcnow().isoformat() + "Z"
     }
     db.lab_requests.insert_one(new_req)
+
+    # If this was created standalone (not already billed under a prescription), create a medical report bill
+    if not data.get("prescriptionId"):
+        lab_pay_id = next_id("payments")
+        db.payments.insert_one({
+            "id": lab_pay_id,
+            "patientId": data["patientId"],
+            "patientName": data.get("patientName", "Patient"),
+            "labRequestId": new_req["id"],
+            "amount": 500,
+            "category": "lab",
+            "method": "pending",
+            "status": "pending",
+            "description": f"Medical Report - {data.get('testType', 'Lab Test')}",
+            "invoiceId": f"INV-2026-{str(lab_pay_id).zfill(3)}",
+            "createdAt": datetime.utcnow().isoformat() + "Z",
+        })
 
     try:
         lab_user = db.users.find_one({"id": lab_id})
@@ -1053,6 +1271,7 @@ def dashboard_patient():
     patient_vax_cursor = db.vaccinations.find({"patientId": user_id}).sort("date", -1)
     patient_vaccinations = serialize_list(patient_vax_cursor)
     patient_profile = db.patients.find_one({"id": user_id}) or {}
+    expenses_summary = calculate_patient_expenses(user_id)
 
     return jsonify({
         "upcomingAppointments": upcomingAppointments,
@@ -1062,8 +1281,53 @@ def dashboard_patient():
         "nextAppointment": nextAppointment,
         "recentActivity": recentActivity,
         "vaccinationStatus": patient_profile.get("vaccinationStatus", "Pending verification"),
-        "vaccinations": patient_vaccinations
+        "vaccinations": patient_vaccinations,
+        "expenses": expenses_summary
     })
+
+@app.route("/api/expenses", methods=["GET"])
+@jwt_required()
+def get_expenses():
+    db = get_db()
+    user_id = int(get_jwt_identity())
+    user = db.users.find_one({"id": user_id})
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    target_patient_id = user_id
+    if user.get("role") in ["admin", "superadmin", "doctor"]:
+        req_patient_id = request.args.get("patientId")
+        if req_patient_id:
+            try:
+                target_patient_id = int(req_patient_id)
+            except ValueError:
+                pass
+            
+    expenses_data = calculate_patient_expenses(target_patient_id)
+    return jsonify(expenses_data)
+
+@app.route("/api/expenses/<int:payment_id>/pay", methods=["POST"])
+@jwt_required()
+def pay_expense_bill(payment_id):
+    db = get_db()
+    user_id = int(get_jwt_identity())
+    payment = db.payments.find_one({"id": payment_id})
+    if not payment:
+        return jsonify({"error": "Bill not found"}), 404
+        
+    data = request.get_json() or {}
+    method = data.get("method", "upi")
+    
+    db.payments.update_one(
+        {"id": payment_id},
+        {"$set": {"status": "completed", "method": method, "paidAt": datetime.utcnow().isoformat() + "Z"}}
+    )
+    
+    if payment.get("appointmentId"):
+        db.appointments.update_one({"id": payment["appointmentId"], "status": "pending"}, {"$set": {"status": "confirmed"}})
+        
+    updated = db.payments.find_one({"id": payment_id})
+    return jsonify(serialize(updated))
 
 @app.route("/api/dashboard/doctor", methods=["GET"])
 @jwt_required()

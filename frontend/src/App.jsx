@@ -11,6 +11,7 @@ import Prescriptions from "@/pages/Prescriptions";
 import Lab from "@/pages/Lab";
 import Models from "@/pages/Models";
 import Payments from "@/pages/Payments";
+import Expenses from "@/pages/Expenses";
 import Notifications from "@/pages/Notifications";
 import Chatbot from "@/pages/Chatbot";
 import ManageSchedule from "@/pages/ManageSchedule";
@@ -75,6 +76,7 @@ function Router() {
       <Route path="/lab" component={() => <ProtectedRoute component={Lab} roles={["patient", "doctor", "lab", "admin"]} />} />
       <Route path="/models" component={() => <ProtectedRoute component={Models} roles={["doctor"]} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={Payments} roles={["patient", "admin", "superadmin"]} />} />
+      <Route path="/expenses" component={() => <ProtectedRoute component={Expenses} roles={["patient", "admin", "superadmin"]} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
       <Route path="/blood-bank" component={() => <ProtectedRoute component={BloodBank} roles={["doctor", "blood_bank", "admin"]} />} />

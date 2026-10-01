@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { Calendar, FileText, FlaskConical, Bell, Users, Activity, AlertTriangle, Clock, ChevronRight, Stethoscope, Building2, X, Brain, Droplet, TrendingUp, Plus, Minus, User, Syringe, ShieldCheck, ClipboardCheck } from "lucide-react";
+import { Calendar, FileText, FlaskConical, Bell, Users, Activity, AlertTriangle, Clock, ChevronRight, Stethoscope, Building2, X, Brain, Droplet, TrendingUp, Plus, Minus, User, Syringe, ShieldCheck, ClipboardCheck, Receipt, Pill } from "lucide-react";
 import { Link } from "wouter";
 
 function StatCard({ icon, label, value, color, trend }) {
@@ -32,9 +32,14 @@ function PatientDashboard({ data }) {
   const [newAllergy, setNewAllergy] = useState("");
   const [showAddAllergyModal, setShowAddAllergyModal] = useState(false);
   const [modalNewAllergy, setModalNewAllergy] = useState("");
+  const [expenses, setExpenses] = useState(data?.expenses || null);
 
   const fetchProfile = () => {
     api.get(`/patients/${user.id}`).then(setProfile).catch(console.error);
+  };
+
+  const fetchExpenses = () => {
+    api.get("/expenses").then(setExpenses).catch(console.error);
   };
 
   const handleAddAllergy = async () => {
@@ -45,9 +50,16 @@ function PatientDashboard({ data }) {
   };
 
   useEffect(() => {
+    if (data?.expenses) {
+      setExpenses(data.expenses);
+    }
+  }, [data]);
+
+  useEffect(() => {
     if (user?.id) {
       api.get(`/lab/requests?patientId=${user.id}`).then(setLabReports).catch(console.error);
       api.get(`/prescriptions?patientId=${user.id}`).then(setPrescriptions).catch(console.error);
+      fetchExpenses();
       // Fetch follow-ups
       api.get(`/followups?patientId=${user.id}`).then((followups) => {
         setFollowups(followups);
@@ -185,6 +197,107 @@ function PatientDashboard({ data }) {
         <StatCard icon={<FileText size={20} className="text-green-600" />} label="Active Prescriptions" value={data?.activePrescriptions ?? 1} color="bg-green-50" />
         <StatCard icon={<ShieldCheck size={20} className="text-teal-600" />} label="Vaccination Status" value={data?.vaccinationStatus || "Up to date"} color="bg-teal-50" />
         <StatCard icon={<Bell size={20} className="text-amber-600" />} label="Notifications" value={data?.unreadNotifications ?? 3} color="bg-amber-50" />
+      </div>
+
+      {/* Total Healthcare Expenses Section */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-[#0d6e7e]">
+              <Receipt size={22} />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                Total Healthcare Expenses
+              </h3>
+              <p className="text-xs text-gray-500">Live breakdown of doctor checkups, medical reports, and medicine bills</p>
+            </div>
+          </div>
+          <Link href="/expenses" className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0d6e7e] hover:text-[#0a5566] bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100 hover:bg-teal-100 transition-colors self-start sm:self-auto">
+            <span>View Full Statement</span>
+            <ChevronRight size={14} />
+          </Link>
+        </div>
+
+        {/* 4 Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Grand Total */}
+          <div className="bg-gradient-to-br from-[#0d6e7e] to-[#084b56] text-white p-4 rounded-xl shadow-sm">
+            <p className="text-teal-200 text-xs font-semibold uppercase tracking-wider">Total Expense</p>
+            <p className="text-2xl font-black mt-1">₹{(expenses?.totalExpense ?? 0).toLocaleString()}</p>
+            <p className="text-[11px] text-teal-100/90 mt-1">{expenses?.totalCount ?? 0} bills recorded</p>
+          </div>
+
+          {/* Doctor Checkup */}
+          <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Doctor Checkup</p>
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <Stethoscope size={15} />
+              </div>
+            </div>
+            <p className="text-xl font-bold text-gray-900 mt-1">₹{(expenses?.doctorCheckupTotal ?? 0).toLocaleString()}</p>
+            <p className="text-[11px] text-gray-500 mt-1">{expenses?.doctorCheckupCount ?? 0} Appointments</p>
+          </div>
+
+          {/* Medical Reports */}
+          <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Medical Reports</p>
+              <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                <FlaskConical size={15} />
+              </div>
+            </div>
+            <p className="text-xl font-bold text-gray-900 mt-1">₹{(expenses?.medicalReportsTotal ?? 0).toLocaleString()}</p>
+            <p className="text-[11px] text-gray-500 mt-1">{expenses?.medicalReportsCount ?? 0} Lab Reports</p>
+          </div>
+
+          {/* Medicine Expenses */}
+          <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Medicine Expenses</p>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <Pill size={15} />
+              </div>
+            </div>
+            <p className="text-xl font-bold text-gray-900 mt-1">₹{(expenses?.medicineTotal ?? 0).toLocaleString()}</p>
+            <p className="text-[11px] text-gray-500 mt-1">{expenses?.medicineCount ?? 0} Prescriptions</p>
+          </div>
+        </div>
+
+        {/* Recent Billed Expenses list */}
+        {expenses?.items && expenses.items.length > 0 && (
+          <div className="space-y-2 pt-1">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Recent Billed Services</p>
+            <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden bg-gray-50/50">
+              {expenses.items.slice(0, 4).map((item) => {
+                const cat = (item.category || "").toLowerCase();
+                const isDoctor = cat === "consultation" || cat === "doctor_checkup" || cat === "emergency";
+                const isLab = cat === "lab" || cat === "medical_reports";
+                return (
+                  <div key={item.id} className="p-3 flex items-center justify-between gap-3 text-xs bg-white">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        isDoctor ? "bg-blue-50 text-blue-700" : isLab ? "bg-purple-50 text-purple-700" : "bg-emerald-50 text-emerald-700"
+                      }`}>
+                        {isDoctor ? "Doctor Checkup" : isLab ? "Medical Report" : "Medicine"}
+                      </span>
+                      <span className="font-semibold text-gray-800 truncate">{item.description}</span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-bold text-gray-900 text-sm">₹{item.amount?.toLocaleString()}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        item.status === "completed" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+                      }`}>
+                        {item.status === "completed" ? "Paid" : "Pending"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
