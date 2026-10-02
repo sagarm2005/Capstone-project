@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
 import {
   X,
@@ -180,6 +180,161 @@ export default function PrescriptionModal({
   };
 
   const totalLabAmount = selectedTests.reduce((sum, t) => sum + (parseFloat(t.price) || 0), 0);
+
+  // Quick test recommendation shortcuts
+  const commonTestPills = [
+    { label: "Chest X-Ray", query: "Chest X-Ray" },
+    { label: "Spine X-Ray", query: "Spine X-Ray" },
+    { label: "CBC with ESR", query: "CBC" },
+    { label: "LFT (Liver)", query: "LFT" },
+    { label: "KFT / RFT", query: "KFT" },
+    { label: "Ultrasound (USG)", query: "Ultrasound" },
+    { label: "HRCT Chest", query: "HRCT" },
+    { label: "Lipid Profile", query: "Lipid Profile" },
+    { label: "Blood Sugar", query: "Blood Sugar" },
+    { label: "HbA1c", query: "HbA1c" },
+    { label: "Dengue Combo", query: "Dengue" },
+    { label: "Thyroid Profile", query: "Thyroid" },
+    { label: "Urine Routine", query: "Urine Routine" },
+    { label: "Urine Culture", query: "Urine Culture" }
+  ];
+
+  const handleAddTestPill = (testQuery) => {
+    if (!labTests.trim()) {
+      setLabTests(testQuery);
+    } else {
+      const parts = labTests.split(",").map((s) => s.trim().toLowerCase());
+      if (!parts.includes(testQuery.toLowerCase())) {
+        setLabTests(`${labTests.trim()}, ${testQuery}`);
+      }
+    }
+  };
+
+  const normalizeQueryTerm = (term) => {
+    return (term || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  };
+
+  // Find all labs that offer the requested test(s) with their specific rate
+  const matchingLabsWithRates = useMemo(() => {
+    const query = labTests.trim();
+    if (!query) return [];
+
+    const terms = query
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    if (terms.length === 0) return [];
+
+    const matched = [];
+
+    labs.forEach((lab) => {
+      const services = lab.services || [];
+      const matchingServices = [];
+
+      terms.forEach((term) => {
+        const tNorm = normalizeQueryTerm(term);
+        if (!tNorm) return;
+
+        const isXrayQuery = tNorm.includes("xray") || tNorm.includes("x-ray") || tNorm === "ray";
+        const isCbcQuery = tNorm.includes("cbc") || tNorm.includes("hemogram") || tNorm.includes("bloodcount");
+        const isLftQuery = tNorm.includes("lft") || tNorm.includes("liver");
+        const isKftQuery = tNorm.includes("kft") || tNorm.includes("rft") || tNorm.includes("kidney") || tNorm.includes("renal");
+        const isUsgQuery = tNorm.includes("usg") || tNorm.includes("ultrasound") || tNorm.includes("sonography");
+        const isCtQuery = tNorm.includes("hrct") || tNorm.includes("ct");
+        const isSugarQuery = tNorm.includes("sugar") || tNorm.includes("glucose") || tNorm.includes("diabetes");
+        const isThyroidQuery = tNorm.includes("thyroid") || tNorm.includes("tsh");
+        const isCultureQuery = tNorm.includes("culture");
+        const isWidalQuery = tNorm.includes("widal") || tNorm.includes("typhoid");
+        const isDengueQuery = tNorm.includes("dengue") || tNorm.includes("ns1");
+
+        services.forEach((srv) => {
+          const sName = srv.name || "";
+          const sCat = srv.category || "";
+          const sDesc = srv.description || "";
+          const sNorm = normalizeQueryTerm(sName + " " + sCat + " " + sDesc);
+
+          let isMatch = false;
+
+          if (isXrayQuery && (sNorm.includes("xray") || sNorm.includes("radiography"))) {
+            isMatch = true;
+          } else if (isCbcQuery && (sNorm.includes("cbc") || sNorm.includes("bloodcount"))) {
+            isMatch = true;
+          } else if (isLftQuery && (sNorm.includes("lft") || sNorm.includes("liver"))) {
+            isMatch = true;
+          } else if (isKftQuery && (sNorm.includes("kft") || sNorm.includes("rft") || sNorm.includes("kidney") || sNorm.includes("renal"))) {
+            isMatch = true;
+          } else if (isUsgQuery && (sNorm.includes("usg") || sNorm.includes("ultrasound") || sNorm.includes("sonography"))) {
+            isMatch = true;
+          } else if (isCtQuery && (sNorm.includes("hrct") || sNorm.includes("ctscan") || sNorm.includes("ct"))) {
+            isMatch = true;
+          } else if (isSugarQuery && (sNorm.includes("sugar") || sNorm.includes("glucose") || sNorm.includes("hba1c"))) {
+            isMatch = true;
+          } else if (isThyroidQuery && (sNorm.includes("thyroid") || sNorm.includes("tsh"))) {
+            isMatch = true;
+          } else if (isCultureQuery && sNorm.includes("culture")) {
+            isMatch = true;
+          } else if (isWidalQuery && (sNorm.includes("widal") || sNorm.includes("typhoid"))) {
+            isMatch = true;
+          } else if (isDengueQuery && (sNorm.includes("dengue") || sNorm.includes("ns1"))) {
+            isMatch = true;
+          } else if (sNorm.includes(tNorm) || sName.toLowerCase().includes(term.toLowerCase())) {
+            isMatch = true;
+          }
+
+          if (isMatch) {
+            if (!matchingServices.some((m) => m.id === srv.id || m.name.toLowerCase() === srv.name.toLowerCase())) {
+              matchingServices.push(srv);
+            }
+          }
+        });
+      });
+
+      if (matchingServices.length > 0) {
+        const subtotal = matchingServices.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
+        matched.push({
+          lab,
+          matchingServices,
+          subtotal
+        });
+      }
+    });
+
+    return matched.sort((a, b) => a.subtotal - b.subtotal);
+  }, [labTests, labs]);
+
+  const handleSelectMatchingLab = (labItem, specificService = null) => {
+    setSelectedLabId(labItem.lab.id);
+
+    if (specificService) {
+      setSelectedTests([
+        {
+          id: specificService.id,
+          name: specificService.name,
+          category: specificService.category || "General Diagnostics",
+          price: parseFloat(specificService.price) || 0,
+          sample: specificService.sample || "Standard Specimen",
+          turnaround: specificService.turnaround || "2-4 hours",
+          labId: labItem.lab.id,
+          labName: labItem.lab.labName
+        }
+      ]);
+      setLabTests(specificService.name);
+    } else {
+      const newTests = labItem.matchingServices.map((srv) => ({
+        id: srv.id,
+        name: srv.name,
+        category: srv.category || "General Diagnostics",
+        price: parseFloat(srv.price) || 0,
+        sample: srv.sample || "Standard Specimen",
+        turnaround: srv.turnaround || "2-4 hours",
+        labId: labItem.lab.id,
+        labName: labItem.lab.labName
+      }));
+      setSelectedTests(newTests);
+      setLabTests(newTests.map((t) => t.name).join(", "));
+    }
+  };
 
   // If initialPatientId changes or is provided
   useEffect(() => {
@@ -473,11 +628,13 @@ export default function PrescriptionModal({
           activeCompounds: m.activeCompounds,
           hasAllergyConflict: m.hasAllergyConflict
         })),
-        labTests: selectedTests.map((t) => t.name),
-        selectedLabId: selectedTests.length > 0 ? (selectedLabId || currentLab?.id) : null,
-        selectedLabName: selectedTests.length > 0 ? (currentLab?.labName || "Diagnostic Center") : "",
-        labOrderDetails: selectedTests,
-        labTotalCost: totalLabAmount,
+        labTests: selectedTests.length > 0
+          ? selectedTests.map((t) => t.name)
+          : labTests.split(",").map((t) => t.trim()).filter(Boolean),
+        selectedLabId: selectedLabId || (selectedTests.length > 0 ? currentLab?.id : null),
+        selectedLabName: (labs.find((l) => l.id === selectedLabId)?.labName) || currentLab?.labName || "",
+        labOrderDetails: selectedTests.length > 0 ? selectedTests : labTests.split(",").map((t) => t.trim()).filter(Boolean).map(t => ({ name: t, price: 500 })),
+        labTotalCost: totalLabAmount > 0 ? totalLabAmount : (labTests.trim() ? 500 : 0),
         followupDate: followupDate || null,
         vitals: { bp, sugar, heartRate, weight },
         patientAge: patientData ? calculateAge(patientData.dateOfBirth) : "28",
@@ -791,8 +948,8 @@ export default function PrescriptionModal({
             </div>
           </div>
 
-          {/* Diagnosis Input */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Diagnosis & Lab Tests Section */}
+          <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                 Clinical Diagnosis *
@@ -800,23 +957,213 @@ export default function PrescriptionModal({
               <input
                 type="text"
                 required
-                placeholder="e.g. Acute Bacterial Sinusitis, Type 2 Diabetes, Upper RTI"
+                placeholder="e.g. Acute Bacterial Sinusitis, Type 2 Diabetes, Upper RTI, Pneumonia"
                 value={diagnosis}
                 onChange={(e) => setDiagnosis(e.target.value)}
                 className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
               />
             </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                Lab Tests Required (comma-separated)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Complete Blood Count (CBC), Serum Creatinine, Liver Function Test"
-                value={labTests}
-                onChange={(e) => setLabTests(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
-              />
+
+            {/* Lab Tests Required with Dynamic Rate Matching */}
+            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4.5 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                    <FlaskConical size={15} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-900 uppercase tracking-wider">
+                      Lab Tests Required (comma-separated)
+                    </label>
+                    <p className="text-[11px] text-gray-500">
+                      Type any test (e.g. <span className="font-semibold text-purple-700">xray</span>, <span className="font-semibold text-purple-700">CBC</span>, <span className="font-semibold text-purple-700">ultrasound</span>) to see only city labs offering it with live rates
+                    </p>
+                  </div>
+                </div>
+
+                {selectedTests.length > 0 && (
+                  <span className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200 shadow-2xs">
+                    <Check size={12} strokeWidth={3} className="text-teal-600" />
+                    <span>{labs.find((l) => l.id === selectedLabId)?.labName || currentLab?.labName || "Lab"} • ₹{totalLabAmount}</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Text Input with Clear Button */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="e.g. xray, Chest X-Ray, Complete Blood Count (CBC), Ultrasound, LFT, KFT..."
+                  value={labTests}
+                  onChange={(e) => setLabTests(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0d6e7e] focus:border-[#0d6e7e] outline-none pr-10"
+                />
+                {labTests && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLabTests("");
+                      setSelectedTests([]);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full"
+                    title="Clear test"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Test Recommendation Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+                  <Sparkles size={11} className="text-[#0d6e7e]" /> Quick Pick:
+                </span>
+                {commonTestPills.map((pill, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleAddTestPill(pill.query)}
+                    className="shrink-0 px-2.5 py-1 bg-white hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-700 transition-colors cursor-pointer shadow-2xs"
+                  >
+                    + {pill.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Dynamic Matching Laboratories Section */}
+              {labTests.trim() ? (
+                <div className="mt-2.5 bg-white rounded-xl p-3.5 border border-purple-100 shadow-2xs space-y-2.5">
+                  <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-purple-600 inline-block animate-pulse"></span>
+                      Available Laboratories Offering "{labTests}":
+                      <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800">
+                        {matchingLabsWithRates.length} {matchingLabsWithRates.length === 1 ? "Lab Found" : "Labs Found with Rates"}
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-medium">Click any lab card to assign</span>
+                  </div>
+
+                  {matchingLabsWithRates.length === 0 ? (
+                    <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                      <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">No city diagnostic center currently offers tests matching "{labTests}".</p>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          Try searching for "xray", "CBC", "LFT", "Ultrasound", "KFT", or click a quick pick button above.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      {matchingLabsWithRates.map((item) => {
+                        const isThisLabSelected = selectedLabId === item.lab.id && selectedTests.length > 0;
+
+                        return (
+                          <div
+                            key={item.lab.id}
+                            className={`rounded-xl p-3 border transition-all flex flex-col justify-between ${
+                              isThisLabSelected
+                                ? "bg-teal-50/50 border-[#0d6e7e] ring-2 ring-teal-200/80 shadow-xs"
+                                : "bg-gray-50/50 border-gray-200 hover:border-teal-300 hover:bg-white hover:shadow-xs"
+                            }`}
+                          >
+                            <div>
+                              {/* Lab Title Strip */}
+                              <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-gray-200/60">
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <Building2 size={13} className="text-[#0d6e7e]" />
+                                    <h5 className="font-bold text-xs text-gray-900">{item.lab.labName}</h5>
+                                  </div>
+                                  <p className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[200px]">
+                                    {item.lab.location || "Metro City Hub"}
+                                  </p>
+                                </div>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                                  ⭐ {item.lab.rating || 4.8}
+                                </span>
+                              </div>
+
+                              {/* Available Services in this lab matching the query */}
+                              <div className="space-y-1.5 mb-2.5">
+                                {item.matchingServices.map((srv) => {
+                                  const isSrvSelected = selectedTests.some(
+                                    (t) => t.name.toLowerCase() === srv.name.toLowerCase() && t.labId === item.lab.id
+                                  );
+
+                                  return (
+                                    <div
+                                      key={srv.id}
+                                      onClick={() => handleSelectMatchingLab(item, srv)}
+                                      className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                                        isSrvSelected
+                                          ? "bg-white border-teal-400 text-teal-950 font-bold shadow-2xs"
+                                          : "bg-white border-gray-200 hover:border-teal-300 text-gray-800"
+                                      }`}
+                                    >
+                                      <div className="min-w-0 pr-2">
+                                        <p className="font-bold text-xs truncate flex items-center gap-1">
+                                          {isSrvSelected && <Check size={11} strokeWidth={3} className="text-teal-600 shrink-0" />}
+                                          <span>{srv.name}</span>
+                                        </p>
+                                        <p className="text-[10px] text-gray-400">
+                                          {srv.sample || "Specimen"} • {srv.turnaround || "Fast"}
+                                        </p>
+                                      </div>
+                                      <div className="text-right shrink-0">
+                                        <span className="font-black text-xs text-[#0d6e7e]">
+                                          ₹{srv.price}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Lab Select Action Button */}
+                            <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between">
+                              <span className="text-[11px] font-medium text-gray-500">
+                                Total Rate: <span className="font-black text-gray-900">₹{item.matchingServices[0]?.price || item.subtotal}</span>
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSelectMatchingLab(item)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  isThisLabSelected
+                                    ? "bg-emerald-600 text-white shadow-2xs"
+                                    : "bg-[#0d6e7e] hover:bg-[#0a5566] text-white shadow-2xs"
+                                }`}
+                              >
+                                {isThisLabSelected ? (
+                                  <>
+                                    <Check size={13} strokeWidth={3} />
+                                    <span>Selected Lab</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>Choose Lab (₹{item.matchingServices[0]?.price || item.subtotal})</span>
+                                    <ArrowRight size={13} />
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3 bg-white rounded-xl border border-dashed border-gray-200 text-xs text-gray-400 flex items-center gap-2">
+                  <Sparkles size={14} className="text-[#0d6e7e] shrink-0" />
+                  <span>
+                    Type any investigation above (e.g. <strong>"xray"</strong>, <strong>"CBC"</strong>, <strong>"ultrasound"</strong>) or click a quick pick button. Only city laboratories providing that service will appear with their rates.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
