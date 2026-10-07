@@ -14,21 +14,23 @@ import {
   Settings,
   LogOut,
   Sparkles,
-  Receipt
+  Receipt,
+  ShieldAlert
 } from "lucide-react";
 
 const MENU_ITEMS = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["patient", "doctor", "lab", "admin", "superadmin", "blood_bank"] },
+  { path: "/safebites", label: "SafeBites", icon: ShieldAlert, roles: ["patient", "doctor", "admin", "superadmin"] },
   { path: "/appointments", label: "Appointments", icon: Calendar, roles: ["patient", "doctor", "admin", "superadmin"] },
   { path: "/prescriptions", label: "Prescriptions", icon: FileText, roles: ["patient", "doctor", "admin"] },
   { path: "/lab", label: "Lab Reports", icon: FlaskConical, roles: ["patient", "doctor", "lab", "admin"] },
-  { path: "/vaccinations", label: "Vaccinations", icon: Syringe, roles: ["patient", "doctor", "admin"] },
+  { path: "/vaccinations", label: "Vaccinations", icon: Syringe, roles: ["patient", "doctor", "admin", "superadmin"] },
   { path: "/patients", label: "Patients", icon: Users, roles: ["doctor", "admin", "superadmin"] },
   { path: "/blood-bank", label: "Blood Bank", icon: Droplet, roles: ["doctor", "blood_bank", "admin"] },
   { path: "/chatbot", label: "AI Assistant", icon: Sparkles, roles: ["patient", "doctor"] },
   { path: "/disease", label: "Disease Monitor", icon: Activity, roles: ["admin", "superadmin"] },
   { path: "/payments", label: "Payments", icon: CreditCard, roles: ["patient", "admin"] },
-  { path: "/expenses", label: "Total Expense", icon: Receipt, roles: ["patient", "admin", "superadmin"] },
+  { path: "/expenses", label: "Total Expense", icon: Receipt, roles: ["patient"] },
   { path: "/notifications", label: "Notifications", icon: Bell, roles: ["patient", "doctor", "lab", "admin", "blood_bank"] },
 ];
 

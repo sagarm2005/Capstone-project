@@ -3,9 +3,10 @@ import logging
 import json
 import mimetypes
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, g
+from functools import wraps
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, create_access_token
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, create_access_token, verify_jwt_in_request
 from db import get_db, serialize, serialize_list
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -15,16 +16,55 @@ import cloudinary.uploader
 import cloudinary.utils
 from healthpilot_service import analyze_prescribed_medicine, check_allergy_against_compounds
 from medicine_service import search_indian_medicines, get_medicine_price_details
+import telegram_service
+import ai_models_service
+from drug_interaction_service import evaluate_drug_interactions
+from safebites_service import fetch_product_from_openfoodfacts, analyze_with_ai, SAMPLE_PRODUCTS
 
 logging.basicConfig(level=logging.INFO)
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-app.secret_key = os.environ.get("SESSION_SECRET", "medicore-dev-secret")
-app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET", "medicore-jwt-secret")
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=1)
+app.secret_key = os.environ.get("SESSION_SECRET") or "medicore-dev-secret"
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET") or os.environ.get("SESSION_SECRET") or "medicore-super-secure-jwt-secret-key-2025"
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
 jwt = JWTManager(app)
+
+def optional_jwt(fn):
+    """
+    Decorator for endpoints where JWT authentication is optional.
+    If the client sends an expired, invalid, or missing token, it does NOT
+    fail with 401 'Token has expired'. Instead, it treats the user as an
+    unauthenticated guest (get_jwt_identity() -> None).
+    """
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            verify_jwt_in_request(optional=True)
+        except Exception:
+            g._jwt_extended_jwt = {}
+            g._jwt_extended_jwt_header = {}
+            g._jwt_extended_jwt_user = {"loaded_user": None}
+            g._jwt_extended_jwt_location = None
+        return fn(*args, **kwargs)
+    return wrapper
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    return jsonify({
+        "error": "Token has expired",
+        "msg": "Token has expired",
+        "token_expired": True
+    }), 401
+
+@jwt.invalid_token_loader
+def invalid_token_callback(error_string):
+    return jsonify({
+        "error": "Invalid token",
+        "msg": "Invalid token",
+        "token_invalid": True
+    }), 401
 
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -68,29 +108,18 @@ def next_id(collection_name):
 
 def check_drug_interactions(medicines):
     """
-    Checks for interactions between a list of medicines using the drug_interactions dataset.
+    Checks for clinical and DDInter interactions between a list of medicines.
     Returns a list of validation objects.
     """
-    db = get_db()
-    validations = []
-    med_names = [m.get("name", "").strip() for m in medicines if m.get("name")]
-    
-    if len(med_names) < 2:
-        return validations
+    res = evaluate_drug_interactions(medicines)
+    return res.get("validations", [])
 
-    # Query for any interactions where both drugs in a record are present in our med_names list
-    interactions = list(db['ddinter_downloads_code_V'].find({
-        "Drug_A": {"$in": med_names},
-        "Drug_B": {"$in": med_names}
-    }))
-
-    for inter in interactions:
-        level = inter.get("Level", "Unknown")
-        validations.append({
-            "type": "error" if level.lower() == "major" else "warning",
-            "message": f"Interaction Detected ({level}): {inter.get('Drug_A')} and {inter.get('Drug_B')} may interact."
-        })
-    return validations
+@app.route("/api/medicines/check-interactions", methods=["POST"])
+def check_interactions_endpoint():
+    data = request.get_json() or {}
+    meds = data.get("medicines", [])
+    result = evaluate_drug_interactions(meds)
+    return jsonify(result), 200
 
 def sync_patient_bills(patient_id):
     db = get_db()
@@ -362,6 +391,55 @@ def delete_file(upload_id):
         db.lab_requests.update_one({"id": upload_record["labRequestId"], "uploadId": upload_id}, {"$unset": {"reportUrl": "", "uploadId": ""}})
     return jsonify({"message": "Upload deleted"})
 
+@app.route("/api/models", methods=["GET"])
+def get_ai_models():
+    """Returns list of supported Hugging Face clinical AI models."""
+    return jsonify(ai_models_service.get_models_list())
+
+@app.route("/api/models/predict", methods=["POST"])
+@jwt_required()
+def predict_model():
+    """
+    Runs multi-disease Hugging Face medical image classification
+    (Pneumonia X-Ray, Tuberculosis Chest X-Ray, Typhoid Blood/Widal Screening, Brain Tumor MRI, Skin Lesion).
+    """
+    user = current_user()
+    if not user or user.get("role") not in {"doctor", "admin", "superadmin"}:
+        return jsonify({"error": "Only doctors and administrators can use AI diagnostic models"}), 403
+
+    image = request.files.get("file")
+    if not image or not image.filename:
+        return jsonify({"error": "A diagnostic scan/image is required"}), 400
+
+    model_id = request.form.get("model", "pneumonia").strip().lower()
+    patient_id = request.form.get("patientId")
+
+    extension = image.filename.rsplit(".", 1)[-1].lower() if "." in image.filename else ""
+    if extension not in {"png", "jpg", "jpeg", "webp"}:
+        return jsonify({"error": "Upload a PNG, JPG, JPEG, or WEBP image"}), 415
+
+    if request.content_length and request.content_length > MAX_UPLOAD_BYTES:
+        return jsonify({"error": "Image must be 15 MB or smaller"}), 413
+
+    try:
+        image_bytes = image.read()
+        report = ai_models_service.run_model_prediction(
+            model_id=model_id,
+            image_bytes=image_bytes,
+            filename=image.filename
+        )
+        if patient_id:
+            try:
+                report["patientId"] = int(patient_id)
+            except (ValueError, TypeError):
+                pass
+        return jsonify(report)
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
+    except Exception as error:
+        logging.error("AI model prediction exception: %s", error, exc_info=True)
+        return jsonify({"error": f"Model inference error: {str(error)}"}), 500
+
 @app.route("/api/models/pneumonia/predict", methods=["POST"])
 @jwt_required()
 def predict_pneumonia():
@@ -372,38 +450,18 @@ def predict_pneumonia():
     image = request.files.get("file")
     if not image or not image.filename:
         return jsonify({"error": "A chest X-ray image is required"}), 400
-    extension = image.filename.rsplit(".", 1)[-1].lower() if "." in image.filename else ""
-    if extension not in {"png", "jpg", "jpeg", "webp"}:
-        return jsonify({"error": "Upload a PNG, JPG, JPEG, or WEBP image"}), 415
-    if request.content_length and request.content_length > MAX_UPLOAD_BYTES:
-        return jsonify({"error": "Image must be 15 MB or smaller"}), 413
+
     try:
-        response = requests.post(
-            f"{MODEL_SERVICE_URL}/predict",
-            files={"file": (image.filename, image.stream, image.mimetype)},
-            timeout=120,
+        image_bytes = image.read()
+        report = ai_models_service.run_model_prediction(
+            model_id="pneumonia",
+            image_bytes=image_bytes,
+            filename=image.filename
         )
-        if response.status_code == 200:
-            return jsonify(response.json())
-        logging.warning("Model service returned status %s: %s", response.status_code, response.text)
-    except requests.RequestException:
-        logging.info("Model service at %s is offline, using clinical AI inference engine", MODEL_SERVICE_URL)
+        return jsonify(report)
     except Exception as error:
         logging.error("Pneumonia prediction exception: %s", error, exc_info=True)
-
-    # Clinical AI Diagnostic Engine fallback
-    return jsonify({
-        "model": "Pneumonia Detection (DenseNet-121 / Clinical AI)",
-        "prediction": "Pneumonia",
-        "condition": "Bacterial Pneumonia",
-        "confidence": 0.89,
-        "findings": "Right lower-lobe consolidation with bronchovesicular air bronchograms visible. Mediastinal contours normal. No pleural effusion.",
-        "secondaryConditions": [
-            {"condition": "Normal", "confidence": 0.08},
-            {"condition": "Bronchitis", "confidence": 0.03}
-        ],
-        "disclaimer": "AI screening support only. A qualified clinician must verify and confirm the final diagnosis."
-    })
+        return jsonify({"error": str(error)}), 500
 
 # ─── Auth Routes ──────────────────────────────────────────────────────────────
 
@@ -638,6 +696,7 @@ def prescriptions():
         med_copy["genericInfo"] = analysis.get("generic", {}) if analysis else {}
         med_copy["packSize"] = analysis.get("pricing", {}).get("packSize", "") if analysis else ""
         med_copy["manufacturer"] = analysis.get("pricing", {}).get("manufacturer", "") if analysis else ""
+        med_copy["dietary"] = analysis.get("dietary", {}) if analysis else {}
         
         total_amount += price
         enriched_medicines.append(med_copy)
@@ -705,12 +764,68 @@ def prescriptions():
         "selectedLabName": selected_lab_name,
         "labOrderDetails": lab_order_details,
         "labTotalCost": round(lab_cost, 2),
-        "labStatus": "pending" if (selected_lab_id and valid_tests) else None,
         "followupDate": data.get("followupDate"),
         "validations": validations,
+        "drugInteractions": evaluate_drug_interactions(enriched_medicines).get("interactions", []),
+        "aiDiagnosticReport": data.get("aiDiagnosticReport"),
         "createdAt": datetime.utcnow().isoformat() + "Z"
     }
     db.prescriptions.insert_one(new_rx)
+
+    # Attach AI Diagnostic Report to lab_requests and notify patient
+    ai_report = data.get("aiDiagnosticReport")
+    if ai_report and isinstance(ai_report, dict):
+        new_diag_id = next_id("lab_requests")
+        test_type_label = ai_report.get("modelName") or ai_report.get("modelLabel") or f"AI Diagnostic ({ai_report.get('disease', 'Investigation')})"
+        diagnosis_label = ai_report.get("condition") or ai_report.get("prediction") or "Pathology Screened"
+        db.lab_requests.insert_one({
+            "id": new_diag_id,
+            "patientId": data["patientId"],
+            "patientName": patient["fullName"] if patient else "Unknown Patient",
+            "patientAge": data.get("patientAge", "28"),
+            "patientBloodGroup": data.get("bloodGroup", "O+"),
+            "doctorId": data["doctorId"],
+            "doctorName": doctor["fullName"] if doctor else "Unknown Doctor",
+            "labName": f"MediCore AI Radiodiagnostics ({ai_report.get('badge', 'Hugging Face ViT')})",
+            "testType": test_type_label,
+            "status": "completed",
+            "doctorConfirmed": True,
+            "confirmedDiagnosis": diagnosis_label,
+            "doctorNotes": data.get("advice") or ai_report.get("findings") or "AI diagnostic model screening verified and attached to prescription by treating physician.",
+            "reportImageUrl": ai_report.get("imageUrl"),
+            "reportUrl": ai_report.get("imageUrl"),
+            "totalPrice": 0,
+            "prescriptionId": new_rx["id"],
+            "aiAnalysis": {
+                "model": ai_report.get("hfModel") or ai_report.get("modelName"),
+                "prediction": ai_report.get("prediction"),
+                "condition": ai_report.get("condition"),
+                "confidence": ai_report.get("confidence", 0.92),
+                "severity": ai_report.get("severity", "Moderate"),
+                "findings": ai_report.get("findings"),
+                "recommendations": ai_report.get("recommendations"),
+                "suggestedTreatment": ai_report.get("suggestedTreatment"),
+                "secondaryConditions": ai_report.get("secondaryConditions", []),
+                "disclaimer": ai_report.get("disclaimer", "AI screening assistive support only. Treating physician verification and clinical confirmation required.")
+            },
+            "createdAt": datetime.utcnow().isoformat() + "Z"
+        })
+
+        try:
+            last_notif = db.notifications.find_one(sort=[("id", -1)])
+            next_notif_id = (last_notif["id"] + 1) if last_notif and "id" in last_notif else 1
+            db.notifications.insert_one({
+                "id": next_notif_id,
+                "userId": data["patientId"],
+                "type": "prescription_ai_report",
+                "title": f"Prescription #{new_rx['id']} with Attached AI Diagnostic Report",
+                "message": f"Dr. {doctor['fullName'] if doctor else 'Doctor'} attached an AI diagnostic screening report ({diagnosis_label}) to your prescription. View details in your dashboard.",
+                "priority": "urgent" if ai_report.get("severity") in ["High", "High / Priority", "Urgent"] else "normal",
+                "read": False,
+                "createdAt": datetime.utcnow().isoformat() + "Z"
+            })
+        except Exception as e:
+            logging.error(f"Failed to create notification: {e}")
 
     # Automatically create medicine bill with real total amount calculated from Indian Medicine Dataset
     valid_meds = [m for m in enriched_medicines if m.get("name")]
@@ -1474,7 +1589,7 @@ def get_profile():
             "hospitalImages", "services", "bio", "status", "dateOfBirth", "bloodGroup",
             "gender", "location", "address", "primaryDoctorName", "primaryDoctorContact",
             "majorSurgeries", "existingConditions", "currentMedicines",
-            "sameBloodGroupContacts", "allergies", "emergencyContact"
+            "sameBloodGroupContacts", "allergies", "emergencyContact", "telegramChatId"
         ]
         updates = {k: v for k, v in data.items() if k in allowed}
         if updates:
@@ -1482,7 +1597,7 @@ def get_profile():
                 db.doctors.update_one({"id": user_id}, {"$set": updates}, upsert=True)
             elif role == "patient":
                 db.patients.update_one({"id": user_id}, {"$set": updates}, upsert=True)
-            user_updates = {k: updates[k] for k in ["fullName", "email", "phone"] if k in updates}
+            user_updates = {k: updates[k] for k in ["fullName", "email", "phone", "telegramChatId"] if k in updates}
             if user_updates:
                 db.users.update_one({"id": user_id}, {"$set": user_updates})
 
@@ -1666,12 +1781,12 @@ def patient_detail(patient_id):
             "fullName", "phone", "email", "dateOfBirth", "gender", "bloodGroup",
             "address", "primaryDoctorName", "primaryDoctorContact",
             "majorSurgeries", "existingConditions", "currentMedicines",
-            "sameBloodGroupContacts", "allergies", "emergencyContact"
+            "sameBloodGroupContacts", "allergies", "emergencyContact", "telegramChatId"
         ]
         updates = {k: v for k, v in data.items() if k in allowed}
         if updates:
             db.patients.update_one({"id": patient_id}, {"$set": updates}, upsert=True)
-            user_updates = {k: updates[k] for k in ["fullName", "email", "phone"] if k in updates}
+            user_updates = {k: updates[k] for k in ["fullName", "email", "phone", "telegramChatId"] if k in updates}
             if user_updates:
                 db.users.update_one({"id": patient_id}, {"$set": user_updates})
         patient = db.patients.find_one({"id": patient_id})
@@ -2129,13 +2244,54 @@ def add_allergy(pt_id):
 @app.route("/api/admin/stats", methods=["GET"])
 def admin_stats():
     db = get_db()
+    today_utc = datetime.utcnow().strftime("%Y-%m-%d")
+    today_local = datetime.now().strftime("%Y-%m-%d")
+    today_dates = list(set([today_utc, today_local]))
+
+    # Real today appointments
+    today_appts = serialize_list(db.appointments.find({"date": {"$in": today_dates}}).sort("time", 1))
+    today_appts_count = len(today_appts)
+
+    # Real all recent appointments (latest 20)
+    recent_appts = serialize_list(db.appointments.find({}).sort([("date", -1), ("id", -1)]).limit(20))
+
+    # Real appointment status counts
+    status_counts = {
+        "confirmed": db.appointments.count_documents({"status": "confirmed"}),
+        "pending": db.appointments.count_documents({"status": "pending"}),
+        "completed": db.appointments.count_documents({"status": "completed"}),
+        "cancelled": db.appointments.count_documents({"status": "cancelled"}),
+    }
+
+    # Real vaccinations status
+    total_vax_records = db.vaccinations.count_documents({})
+    unique_vax_patient_ids = db.vaccinations.distinct("patientId")
+    unique_vax_count = len(unique_vax_patient_ids)
+
+    # Also check patients with vaccinationStatus recorded
+    patients_with_vax_status = db.patients.count_documents({
+        "vaccinationStatus": {"$exists": True, "$ne": "Pending verification", "$regex": "^(?!Pending verification).*$"}
+    })
+    total_people_vaccinated = max(unique_vax_count, patients_with_vax_status)
+
+    recent_vax_records = serialize_list(db.vaccinations.find({}).sort([("date", -1), ("id", -1)]).limit(15))
+    total_patients_count = db.patients.count_documents({})
+
     return jsonify({
         "totalDoctors": db.doctors.count_documents({}),
         "activeDoctors": db.doctors.count_documents({"status": "active"}),
-        "totalPatients": db.patients.count_documents({}),
+        "totalPatients": total_patients_count,
         "totalFacilities": 34,
         "criticalAlerts": 7,
-        "appointmentsToday": db.appointments.count_documents({"date": datetime.utcnow().strftime("%Y-%m-%d")}),
+        "appointmentsToday": today_appts_count,
+        "todayAppointments": today_appts,
+        "recentAppointments": recent_appts,
+        "totalAppointments": db.appointments.count_documents({}),
+        "appointmentStatusCounts": status_counts,
+        "totalVaccinations": total_vax_records,
+        "vaccinatedPeopleCount": total_people_vaccinated,
+        "vaccinatedPatients": unique_vax_patient_ids,
+        "recentVaccinations": recent_vax_records,
         "prescriptionsToday": db.prescriptions.count_documents({}),
         "pendingLabReports": db.lab_requests.count_documents({"status": "pending"}),
     })
@@ -2154,6 +2310,145 @@ def admin_disease_data():
 def admin_spread_prediction():
     db = get_db()
     return jsonify(serialize_list(db.spread_predictions.find({})))
+
+# ─── Telegram & Admin Broadcast ──────────────────────────────────────────────
+
+@app.route("/api/admin/telegram/status", methods=["GET"])
+def admin_telegram_status():
+    db = get_db()
+    cfg = telegram_service.get_telegram_config(db)
+    bot_info = telegram_service.get_bot_info(cfg["bot_token"]) if cfg["bot_token"] else {"ok": False, "error": "Not configured"}
+    recent_senders = telegram_service.get_recent_telegram_updates(cfg["bot_token"]) if cfg["bot_token"] else []
+
+    return jsonify({
+        "configured": cfg["is_configured"],
+        "botTokenMasked": (cfg["bot_token"][:7] + "..." + cfg["bot_token"][-4:]) if cfg["bot_token"] and len(cfg["bot_token"]) > 12 else "",
+        "defaultChatId": cfg["default_chat_id"],
+        "botInfo": bot_info,
+        "recentSenders": recent_senders
+    })
+
+@app.route("/api/admin/telegram/config", methods=["POST"])
+def admin_telegram_config():
+    db = get_db()
+    data = request.get_json() or {}
+    bot_token = data.get("botToken", "")
+    default_chat_id = data.get("defaultChatId", "")
+
+    # Validate token if provided
+    if bot_token:
+        test = telegram_service.get_bot_info(bot_token)
+        if not test.get("ok"):
+            return jsonify({"error": f"Invalid Bot Token: {test.get('error')}"}), 400
+
+    cfg = telegram_service.save_telegram_config(db, bot_token, default_chat_id)
+    bot_info = telegram_service.get_bot_info(cfg["bot_token"]) if cfg["bot_token"] else None
+
+    return jsonify({
+        "message": "Telegram configuration saved successfully",
+        "configured": cfg["is_configured"],
+        "botInfo": bot_info,
+        "defaultChatId": cfg["default_chat_id"]
+    })
+
+@app.route("/api/admin/telegram/test", methods=["POST"])
+def admin_telegram_test():
+    db = get_db()
+    data = request.get_json() or {}
+    chat_id = data.get("chatId")
+    cfg = telegram_service.get_telegram_config(db)
+    bot_token = cfg["bot_token"]
+
+    if not bot_token:
+        return jsonify({"error": "Telegram Bot Token is not configured. Please enter your BotFather token first."}), 400
+    if not chat_id:
+        chat_id = cfg["default_chat_id"]
+    if not chat_id:
+        return jsonify({"error": "No Chat ID provided for testing. Enter a target Chat ID or set a Default Chat ID."}), 400
+
+    test_msg = (
+        "🏥 <b>MediCore HMS — Telegram Test Message</b>\n\n"
+        "✅ Your Telegram Bot integration is working perfectly!\n"
+        "Super Admin announcements and patient alerts will now be dispatched through this bot."
+    )
+
+    res = telegram_service.send_telegram_message(bot_token, chat_id, test_msg)
+    if res.get("ok"):
+        return jsonify({"message": "Test message delivered successfully to Telegram!", "messageId": res.get("message_id")})
+    else:
+        return jsonify({"error": f"Delivery failed: {res.get('error')}"}), 400
+
+@app.route("/api/admin/users-list", methods=["GET"])
+def admin_users_list():
+    db = get_db()
+    users = list(db.users.find({}, {"_id": 0, "password": 0}))
+    patients = list(db.patients.find({}, {"_id": 0}))
+
+    user_ids = {u.get("id") for u in users if "id" in u}
+    combined = list(users)
+
+    for p in patients:
+        if p.get("id") not in user_ids:
+            combined.append({
+                "id": p.get("id"),
+                "fullName": p.get("fullName"),
+                "email": p.get("email"),
+                "phone": p.get("phone"),
+                "role": "patient",
+                "telegramChatId": p.get("telegramChatId")
+            })
+
+    return jsonify(combined)
+
+@app.route("/api/users/<int:user_id>/telegram", methods=["PATCH"])
+def update_user_telegram(user_id):
+    db = get_db()
+    data = request.get_json() or {}
+    chat_id = str(data.get("telegramChatId", "")).strip()
+
+    db.users.update_one({"id": user_id}, {"$set": {"telegramChatId": chat_id}})
+    db.patients.update_one({"id": user_id}, {"$set": {"telegramChatId": chat_id}})
+    db.doctors.update_one({"id": user_id}, {"$set": {"telegramChatId": chat_id}})
+
+    return jsonify({"message": "Telegram Chat ID updated successfully", "userId": user_id, "telegramChatId": chat_id})
+
+@app.route("/api/admin/broadcast", methods=["POST"])
+def admin_broadcast():
+    db = get_db()
+    data = request.get_json() or {}
+    title = data.get("title", "").strip()
+    message = data.get("message", "").strip()
+    target_type = data.get("targetType", "all")
+    target_user_id = data.get("targetUserId")
+    custom_chat_id = data.get("customChatId")
+    priority = data.get("priority", "normal")
+    send_telegram = data.get("sendTelegram", True)
+    send_in_app = data.get("sendInApp", True)
+    sender_name = data.get("senderName", "MediCore Super Admin")
+
+    if not message:
+        return jsonify({"error": "Message content cannot be empty"}), 400
+
+    result = telegram_service.dispatch_broadcast(
+        db=db,
+        title=title,
+        message=message,
+        target_type=target_type,
+        target_user_id=target_user_id,
+        custom_chat_id=custom_chat_id,
+        priority=priority,
+        send_telegram=send_telegram,
+        send_in_app=send_in_app,
+        sender_name=sender_name
+    )
+
+    return jsonify(result)
+
+@app.route("/api/admin/broadcast/history", methods=["GET"])
+def admin_broadcast_history():
+    db = get_db()
+    records = list(db.broadcast_history.find({}).sort("createdAt", -1).limit(20))
+    return jsonify(serialize_list(records))
 
 # ─── Payments ─────────────────────────────────────────────────────────────────
 
@@ -2232,7 +2527,7 @@ def vaccinations_api():
 # ─── Chatbot ──────────────────────────────────────────────────────────────────
 
 @app.route("/api/chatbot/query", methods=["POST"])
-@jwt_required(optional=True)
+@optional_jwt
 def chatbot_query():
     data = request.get_json()
     user_msg = data.get("message", "")
@@ -2294,6 +2589,251 @@ def chatbot_query():
         "intent": "general",
         "suggestions": ["Go to Dashboard", "View Appointments", "Try Again"]
     })
+
+# ─── SafeBites (True Food Label & Additives Safety Scanner) ────────────────────
+
+@app.route("/api/safebites/samples", methods=["GET"])
+def safebites_samples():
+    return jsonify({"success": True, "samples": SAMPLE_PRODUCTS})
+
+@app.route("/api/safebites/scan", methods=["POST"])
+@optional_jwt
+def safebites_scan():
+    data = request.get_json() or {}
+    barcode = str(data.get("barcode", "")).strip()
+    query = str(data.get("query", "")).strip()
+    ingredients_text = str(data.get("ingredients_text", "")).strip()
+    product_name = str(data.get("product_name", "")).strip()
+
+    target = barcode or query
+    if not target and not ingredients_text:
+        return jsonify({"error": "Barcode, search query, or ingredients text is required"}), 400
+
+    # Fetch patient profile if logged in
+    patient_profile = None
+    user_id = get_jwt_identity()
+    if user_id:
+        try:
+            db = get_db()
+            patient_profile = db.patients.find_one({"id": int(user_id)})
+        except Exception as e:
+            logging.error(f"Error fetching patient profile for SafeBites: {e}")
+
+    # Fetch product info from OpenFoodFacts
+    product = None
+    if target:
+        product = fetch_product_from_openfoodfacts(target)
+
+    # If not found on OpenFoodFacts or user provided custom text
+    if not product:
+        if ingredients_text or target:
+            product = {
+                "barcode": barcode or "custom-label",
+                "product_name": product_name or (target if not barcode else "Scanned Food Item"),
+                "brand": data.get("brand", "Label Analysis"),
+                "categories": "Food Product",
+                "image_url": data.get("image_url", ""),
+                "ingredients_text": ingredients_text or f"Product identifier: {target}",
+                "additives_tags": [],
+                "allergens_tags": [],
+                "nutriscore_grade": "",
+                "nova_group": 4 if "syrup" in (ingredients_text or "").lower() else 3,
+                "nutrient_levels": {},
+                "nutriments_100g": {}
+            }
+        else:
+            return jsonify({"error": f"Product not found on OpenFoodFacts for '{target}'. Try entering the product name or ingredients."}), 404
+
+    # Run AI / Forensic Additive Analysis
+    analysis = analyze_with_ai(openai_client, product, patient_profile=patient_profile, query_text=f"{target} {data.get('topic', '')}")
+
+    # Save to MongoDB scan history if DB is available
+    try:
+        db = get_db()
+        scan_record = {
+            "userId": int(user_id) if user_id else None,
+            "product_name": product.get("product_name"),
+            "brand": product.get("brand"),
+            "barcode": product.get("barcode"),
+            "image_url": product.get("image_url"),
+            "safety_score": analysis.get("safety_score"),
+            "safety_rating": analysis.get("safety_rating"),
+            "dangerous_count": len(analysis.get("dangerous_ingredients", [])),
+            "createdAt": datetime.utcnow().isoformat()
+        }
+        db.safebites_scans.insert_one(scan_record)
+    except Exception as e:
+        logging.error(f"Failed to record SafeBites scan history: {e}")
+
+    return jsonify({
+        "success": True,
+        "product": product,
+        "analysis": analysis
+    })
+
+@app.route("/api/safebites/scan-image", methods=["POST"])
+@optional_jwt
+def safebites_scan_image():
+    """
+    Accepts an uploaded image file or base64 data URL.
+    Uses AI Vision to read barcode numbers, packaging labels, and ingredients,
+    then retrieves nutritional data from OpenFoodFacts and completes forensic audit.
+    """
+    import base64
+    import re
+
+    image_data_base64 = None
+    mime_type = "image/jpeg"
+
+    if "image" in request.files:
+        uploaded_file = request.files["image"]
+        image_bytes = uploaded_file.read()
+        image_data_base64 = base64.b64encode(image_bytes).decode("utf-8")
+        mime_type = uploaded_file.content_type or "image/jpeg"
+    else:
+        req_data = request.get_json(silent=True) or {}
+        image_raw = req_data.get("image_base64") or req_data.get("image") or ""
+        if image_raw:
+            if "," in image_raw:
+                meta_part, b64_part = image_raw.split(",", 1)
+                image_data_base64 = b64_part
+                if "png" in meta_part:
+                    mime_type = "image/png"
+                elif "webp" in meta_part:
+                    mime_type = "image/webp"
+            else:
+                image_data_base64 = image_raw
+
+    if not image_data_base64:
+        return jsonify({"error": "No image uploaded. Please upload a clear photo of the barcode or package."}), 400
+
+    # Fetch patient profile if logged in
+    patient_profile = None
+    user_id = get_jwt_identity()
+    if user_id:
+        try:
+            db = get_db()
+            patient_profile = db.patients.find_one({"id": int(user_id)})
+        except Exception as e:
+            logging.error(f"Error fetching patient profile for SafeBites image scan: {e}")
+
+    detected_barcode = None
+    detected_product_name = None
+    detected_brand = None
+    detected_ingredients = None
+
+    try:
+        data_url = f"data:{mime_type};base64,{image_data_base64}"
+        vision_prompt = (
+            "You are a barcode reader and food package inspector.\n"
+            "Analyze this uploaded image (which could be a barcode, food package front, or nutrition label):\n"
+            "1. barcode: Look closely for any numeric barcode digits (e.g. 12-14 digit UPC/EAN code usually printed under the barcode stripes). Return JUST the digits or null if not found.\n"
+            "2. product_name: The brand and exact product name shown on packaging (e.g. 'Doritos Nacho Cheese', 'Nutella Hazelnut Spread').\n"
+            "3. brand: The brand manufacturer name (e.g. 'Frito-Lay', 'Ferrero', 'Kraft').\n"
+            "4. ingredients_text: Any list of ingredients legible in the image, or null if none.\n\n"
+            "Respond ONLY with a JSON object: {\"barcode\": string or null, \"product_name\": string or null, \"brand\": string or null, \"ingredients_text\": string or null}"
+        )
+
+        vision_resp = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": vision_prompt},
+                        {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}}
+                    ]
+                }
+            ],
+            temperature=0.1,
+            max_tokens=500,
+            response_format={"type": "json_object"}
+        )
+
+        content = vision_resp.choices[0].message.content.strip()
+        parsed = json.loads(content)
+        raw_code = parsed.get("barcode") or ""
+        clean_code = re.sub(r"[^\d]", "", str(raw_code))
+        if len(clean_code) >= 6:
+            detected_barcode = clean_code
+
+        detected_product_name = (parsed.get("product_name") or "").strip()
+        detected_brand = (parsed.get("brand") or "").strip()
+        detected_ingredients = (parsed.get("ingredients_text") or "").strip()
+
+    except Exception as e:
+        logging.error(f"SafeBites Vision analysis error: {e}")
+
+    product = None
+    target_query = detected_barcode or detected_product_name
+
+    if detected_barcode:
+        product = fetch_product_from_openfoodfacts(detected_barcode)
+
+    if not product and detected_product_name:
+        product = fetch_product_from_openfoodfacts(detected_product_name)
+
+    if not product:
+        if detected_product_name or detected_ingredients:
+            product = {
+                "barcode": detected_barcode or "photo-scan",
+                "product_name": detected_product_name or "Scanned Food Product",
+                "brand": detected_brand or "Label Analysis",
+                "categories": "Food Product",
+                "image_url": "",
+                "ingredients_text": detected_ingredients or f"Identified as: {detected_product_name}",
+                "additives_tags": [],
+                "allergens_tags": [],
+                "nutriscore_grade": "",
+                "nova_group": 4,
+                "nutrient_levels": {},
+                "nutriments_100g": {}
+            }
+        else:
+            return jsonify({
+                "error": "Could not identify a clear barcode or food product label in this photo. Please try a clearer picture or enter the barcode manually."
+            }), 404
+
+    # Run AI analysis
+    analysis = analyze_with_ai(openai_client, product, patient_profile=patient_profile, query_text=target_query or "")
+
+    # Save to MongoDB scan history if DB is available
+    try:
+        db = get_db()
+        scan_record = {
+            "userId": int(user_id) if user_id else None,
+            "product_name": product.get("product_name"),
+            "brand": product.get("brand"),
+            "barcode": product.get("barcode"),
+            "image_url": product.get("image_url"),
+            "safety_score": analysis.get("safety_score"),
+            "safety_rating": analysis.get("safety_rating"),
+            "dangerous_count": len(analysis.get("dangerous_ingredients", [])),
+            "createdAt": datetime.utcnow().isoformat()
+        }
+        db.safebites_scans.insert_one(scan_record)
+    except Exception as e:
+        logging.error(f"Failed to record SafeBites scan history: {e}")
+
+    return jsonify({
+        "success": True,
+        "product": product,
+        "analysis": analysis,
+        "detected_barcode": detected_barcode
+    })
+
+@app.route("/api/safebites/history", methods=["GET"])
+@optional_jwt
+def safebites_history():
+    user_id = get_jwt_identity()
+    query = {"userId": int(user_id)} if user_id else {}
+    try:
+        db = get_db()
+        records = list(db.safebites_scans.find(query).sort("createdAt", -1).limit(10))
+        return jsonify({"success": True, "history": serialize_list(records)})
+    except Exception as e:
+        logging.error(f"Error fetching SafeBites history: {e}")
+        return jsonify({"success": True, "history": []})
 
 # ─── Health ───────────────────────────────────────────────────────────────────
 

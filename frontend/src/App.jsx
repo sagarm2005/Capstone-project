@@ -20,6 +20,7 @@ import Disease from "@/pages/Disease";
 import Locations from "@/pages/Locations";
 import Vaccinations from "@/pages/Vaccinations";
 import BloodBank from "@/pages/BloodBank";
+import SafeBites from "@/pages/SafeBites";
 import Profile from "@/components/Profile";
 import NotFound from "@/pages/NotFound";
 
@@ -80,6 +81,7 @@ function Router() {
       <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
       <Route path="/blood-bank" component={() => <ProtectedRoute component={BloodBank} roles={["doctor", "blood_bank", "admin"]} />} />
+      <Route path="/safebites" component={() => <ProtectedRoute component={SafeBites} roles={["patient", "doctor", "admin", "superadmin"]} />} />
       <Route path="/chatbot" component={() => <ProtectedRoute component={Chatbot} roles={["patient"]} />} />
       <Route path="/patients" component={() => <ProtectedRoute component={Patients} roles={["doctor", "admin", "superadmin"]} />} />
       <Route path="/disease" component={() => <ProtectedRoute component={Disease} roles={["admin", "superadmin"]} />} />

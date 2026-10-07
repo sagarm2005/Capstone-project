@@ -4,7 +4,8 @@ import { useLocation } from "wouter";
 import { jsPDF } from "jspdf";
 import { api } from "@/lib/api";
 import PrescriptionModal from "@/components/PrescriptionModal";
-import { FileText, Plus, X, CheckCircle, AlertTriangle, XCircle, Printer, Download, Mail, Phone, MapPin, FlaskConical, CheckCircle2, Sparkles, ExternalLink } from "lucide-react";
+import NonVegIcon, { isNonVegMedicine } from "@/components/NonVegIcon";
+import { FileText, Plus, X, CheckCircle, AlertTriangle, XCircle, Printer, Download, Mail, Phone, MapPin, FlaskConical, CheckCircle2, Sparkles, ExternalLink, ShieldAlert } from "lucide-react";
 
 function ValidationIcon({ type }) {
   if (type === "success") return <CheckCircle size={14} className="text-green-500 shrink-0" />;
@@ -200,6 +201,11 @@ export default function Prescriptions() {
               <p className="text-xs text-gray-400">{rx.medicines?.length} medicine(s)</p>
               <p className="text-xs text-gray-400">{new Date(rx.createdAt).toLocaleDateString()}</p>
             </div>
+            {rx.aiDiagnosticReport && (
+              <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-teal-800 bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-200">
+                <Sparkles size={11} className="text-[#0d6e7e]" /> AI Report: {rx.aiDiagnosticReport.condition || rx.aiDiagnosticReport.prediction}
+              </div>
+            )}
             {rx.labConfirmedDiagnosis ? (
               <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
                 <CheckCircle2 size={12} className="text-emerald-600" /> Confirmed: {rx.labConfirmedDiagnosis}
@@ -212,6 +218,18 @@ export default function Prescriptions() {
             {rx.validations?.some((v) => v.type === "error") && (
               <div className="mt-2 flex items-center gap-1 text-xs text-red-600">
                 <XCircle size={12} /> Allergy conflict detected
+              </div>
+            )}
+            {rx.drugInteractions?.length > 0 && (
+              <div className="mt-1.5 flex items-center gap-1 text-xs text-red-700 font-bold bg-red-50 p-1.5 rounded-lg border border-red-200">
+                <ShieldAlert size={13} className="shrink-0 text-red-600" />
+                <span>Drug Interaction Alert ({rx.drugInteractions.length})</span>
+              </div>
+            )}
+            {rx.medicines?.some((m) => isNonVegMedicine(m.name)) && (
+              <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-bold text-red-800">
+                <NonVegIcon name="salmon" size="sm" showBadge={false} />
+                <span>Non-Veg Supplement Prescribed</span>
               </div>
             )}
           </button>
@@ -314,6 +332,30 @@ export default function Prescriptions() {
                 </div>
               </div>
 
+              {/* Drug-Drug Interaction Alert Banner in Details View */}
+              {selected.drugInteractions?.length > 0 && (
+                <div className="p-4 rounded-2xl bg-red-600 text-white shadow-md border border-red-500 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert size={18} className="text-amber-300 shrink-0" />
+                    <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                      🚨 Clinical Drug Interaction Warning ({selected.drugInteractions.length} Detected)
+                    </h4>
+                  </div>
+                  <div className="space-y-1.5">
+                    {selected.drugInteractions.map((inter, i) => (
+                      <div key={i} className="bg-black/20 p-2.5 rounded-xl text-xs space-y-0.5">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-amber-200">{inter.drugA} + {inter.drugB}</span>
+                          <span className="text-[10px] bg-red-800 px-1.5 py-0.5 rounded font-bold uppercase">{inter.severity || "Major"}</span>
+                        </div>
+                        <p className="font-bold text-white text-[11px]">{inter.title}</p>
+                        <p className="text-red-100 text-[10px]">{inter.mechanism}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Medicines Table */}
               <div className="space-y-4">
                 <div className="bg-teal-800 text-white rounded-t-xl px-4 py-3 flex justify-between items-center">
@@ -334,7 +376,12 @@ export default function Prescriptions() {
                       {selected.medicines?.map((med, i) => (
                         <tr key={i}>
                           <td className="px-4 py-4 font-black text-gray-900">
-                            <div>{med.name}</div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span>{med.name}</span>
+                              {isNonVegMedicine(med.name) && (
+                                <NonVegIcon name={med.name} size="sm" />
+                              )}
+                            </div>
                             {med.activeCompounds?.length > 0 && (
                               <div className="text-[10px] text-teal-700 font-semibold mt-0.5">
                                 Active: {med.activeCompounds.join(", ")}
@@ -366,6 +413,77 @@ export default function Prescriptions() {
                   </table>
                 </div>
               </div>
+
+              {/* Attached Hugging Face AI Diagnostic Report */}
+              {selected.aiDiagnosticReport && (
+                <div className="bg-gradient-to-r from-teal-50/90 via-cyan-50/60 to-emerald-50/70 border border-teal-200 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#0d6e7e] text-white flex items-center gap-1 shadow-2xs">
+                        <Sparkles size={11} /> Attached Hugging Face Diagnostic Report
+                      </span>
+                      <span className="text-[11px] font-mono font-bold text-teal-800 bg-white px-2 py-0.5 rounded border border-teal-200">
+                        {selected.aiDiagnosticReport.hfModel || selected.aiDiagnosticReport.modelName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-black text-[10px] border border-emerald-300">
+                        {Math.round((selected.aiDiagnosticReport.confidence || 0.92) * 100)}% Confidence
+                      </span>
+                      <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 rounded-full font-bold text-[10px] border border-amber-300">
+                        {selected.aiDiagnosticReport.severity || "Moderate"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                    {selected.aiDiagnosticReport.imageUrl && (
+                      <div className="sm:col-span-4">
+                        <div className="relative rounded-xl overflow-hidden border border-teal-200 bg-black/5 aspect-square flex items-center justify-center">
+                          <img
+                            src={selected.aiDiagnosticReport.imageUrl}
+                            alt="Attached Scan"
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-black/60 p-1 text-[9px] text-white font-medium text-center truncate">
+                            {selected.aiDiagnosticReport.modality || "Diagnostic Radiograph"}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className={selected.aiDiagnosticReport.imageUrl ? "sm:col-span-8 space-y-2 text-xs" : "sm:col-span-12 space-y-2 text-xs"}>
+                      <h4 className="text-base font-black text-gray-900 flex items-center gap-1.5">
+                        <FlaskConical size={16} className="text-[#0d6e7e]" />
+                        {selected.aiDiagnosticReport.condition || selected.aiDiagnosticReport.prediction}
+                      </h4>
+                      {selected.aiDiagnosticReport.findings && (
+                        <p className="text-gray-700 bg-white/90 p-3 rounded-xl border border-teal-100 leading-relaxed">
+                          <span className="font-bold text-gray-900">Radiological / Laboratory Findings: </span>
+                          {selected.aiDiagnosticReport.findings}
+                        </p>
+                      )}
+                      {selected.aiDiagnosticReport.recommendations && (
+                        <p className="text-teal-950 font-medium">
+                          <span className="font-bold text-[#0d6e7e]">Clinical Action Plan: </span>
+                          {selected.aiDiagnosticReport.recommendations}
+                        </p>
+                      )}
+                      {selected.aiDiagnosticReport.imageUrl && (
+                        <div className="pt-1">
+                          <a
+                            href={selected.aiDiagnosticReport.imageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-[#0d6e7e] font-bold hover:underline"
+                          >
+                            <ExternalLink size={13} /> Open High-Resolution Scan Image
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Lab & Notes */}
               <div className="grid grid-cols-2 gap-8">

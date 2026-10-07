@@ -30,6 +30,7 @@ import {
   CheckSquare,
   Square
 } from "lucide-react";
+import NonVegIcon, { isNonVegMedicine } from "./NonVegIcon";
 
 export default function PrescriptionModal({
   isOpen,
@@ -38,13 +39,15 @@ export default function PrescriptionModal({
   initialPatientName = "",
   appointmentId = null,
   onPrescriptionCreated,
-  doctor = null
+  doctor = null,
+  initialAttachedReport = null
 }) {
   const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(initialPatientId || 0);
   const [patientData, setPatientData] = useState(null);
   const [diagnosis, setDiagnosis] = useState("");
   const [severity, setSeverity] = useState("Medium");
+  const [attachedReport, setAttachedReport] = useState(initialAttachedReport || null);
   const [labTests, setLabTests] = useState("");
   const [followupDate, setFollowupDate] = useState("");
   const [bp, setBp] = useState("");
@@ -58,6 +61,8 @@ export default function PrescriptionModal({
   const [advice, setAdvice] = useState("");
   const [docDetails, setDocDetails] = useState(doctor || null);
   const [openGenericPopupIndex, setOpenGenericPopupIndex] = useState(null);
+  const [drugInteractions, setDrugInteractions] = useState([]);
+  const [checkingInteractions, setCheckingInteractions] = useState(false);
 
   // Diagnostic Lab & Menu Card State
   const [labs, setLabs] = useState([]);
@@ -80,6 +85,25 @@ export default function PrescriptionModal({
       setDocDetails(doctor);
     }
   }, [doctor, isOpen]);
+
+  // Synchronize initial attached AI report when modal opens or prop changes
+  useEffect(() => {
+    if (initialAttachedReport) {
+      setAttachedReport(initialAttachedReport);
+      if (initialAttachedReport.condition) {
+        setDiagnosis(initialAttachedReport.condition);
+      } else if (initialAttachedReport.prediction) {
+        setDiagnosis(initialAttachedReport.prediction);
+      }
+      if (initialAttachedReport.severity) {
+        const sev = String(initialAttachedReport.severity);
+        setSeverity(sev.includes("High") || sev.includes("Urgent") || sev.includes("Priority") ? "High" : "Medium");
+      }
+      if (initialAttachedReport.suggestedTreatment && !advice) {
+        setAdvice(initialAttachedReport.suggestedTreatment);
+      }
+    }
+  }, [initialAttachedReport, isOpen]);
 
   // Close generic popover on global click
   useEffect(() => {
@@ -367,6 +391,28 @@ export default function PrescriptionModal({
     });
   };
 
+  // Real-time Drug-Drug Interaction evaluation across all prescribed medicines
+  useEffect(() => {
+    const validMeds = medicines.filter((m) => m.name && m.name.trim().length >= 2);
+    if (validMeds.length < 2) {
+      setDrugInteractions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setCheckingInteractions(true);
+        const res = await api.post("/medicines/check-interactions", { medicines: validMeds });
+        setDrugInteractions(res.interactions || []);
+      } catch (err) {
+        console.error("Interaction check error:", err);
+      } finally {
+        setCheckingInteractions(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [medicines]);
+
   const handlePatientSelect = (e) => {
     const id = Number(e.target.value);
     setSelectedPatientId(id);
@@ -641,6 +687,7 @@ export default function PrescriptionModal({
         bloodGroup: patientData?.bloodGroup || "O+",
         advice,
         notes: advice,
+        aiDiagnosticReport: attachedReport || null,
         appointmentId
       };
 
@@ -896,6 +943,70 @@ export default function PrescriptionModal({
               </div>
             </div>
           </div>
+
+          {/* Attached Hugging Face AI Diagnostic Report Card */}
+          {attachedReport && (
+            <div className="bg-gradient-to-r from-teal-50/90 via-cyan-50/70 to-emerald-50/80 border border-teal-200/90 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#0d6e7e] text-white flex items-center gap-1 shadow-2xs">
+                    <Sparkles size={11} /> Attached Hugging Face Diagnostic Report
+                  </span>
+                  <span className="text-[11px] font-mono font-bold text-teal-800 bg-white px-2 py-0.5 rounded-md border border-teal-200">
+                    {attachedReport.hfModel || attachedReport.modelName}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAttachedReport(null)}
+                  className="text-[11px] text-red-600 hover:text-red-800 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <X size={13} /> Remove Attachment
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                {attachedReport.imageUrl && (
+                  <div className="sm:col-span-3">
+                    <div className="relative rounded-xl overflow-hidden border border-teal-200 bg-black/10 aspect-video sm:aspect-square flex items-center justify-center group">
+                      <img src={attachedReport.imageUrl} alt="Scan" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <div className="absolute inset-x-0 bottom-0 bg-black/70 p-1 text-[9px] text-white font-medium text-center truncate">
+                        {attachedReport.modality || "Radiograph"}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className={attachedReport.imageUrl ? "sm:col-span-9 space-y-2" : "sm:col-span-12 space-y-2"}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 className="text-sm font-black text-gray-900 flex items-center gap-1.5">
+                      <FlaskConical size={15} className="text-[#0d6e7e]" />
+                      {attachedReport.condition || attachedReport.prediction}
+                    </h4>
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-black text-[10px] border border-emerald-300">
+                        {Math.round((attachedReport.confidence || 0.92) * 100)}% Confidence
+                      </span>
+                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full font-bold text-[10px] border border-amber-300">
+                        {attachedReport.severity || "Moderate"}
+                      </span>
+                    </div>
+                  </div>
+                  {attachedReport.findings && (
+                    <p className="text-xs text-gray-700 bg-white/90 p-2.5 rounded-xl border border-teal-100 leading-relaxed">
+                      <span className="font-bold text-gray-900">Clinical Findings: </span>
+                      {attachedReport.findings}
+                    </p>
+                  )}
+                  {attachedReport.recommendations && (
+                    <p className="text-[11px] text-teal-900 font-medium">
+                      <span className="font-bold text-[#0d6e7e]">Clinical Action: </span>
+                      {attachedReport.recommendations}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Follow-up & Vitals Grid (Shifted below Patient Demographics & Clinical Records) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50/70 p-4 rounded-2xl border border-gray-200">
@@ -1191,23 +1302,94 @@ export default function PrescriptionModal({
               </button>
             </div>
 
+            {/* Real-time Drug-Drug Interaction Alert Banner */}
+            {drugInteractions.length > 0 && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white shadow-lg border-2 border-red-400 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-bold text-amber-200 shrink-0">
+                      <ShieldAlert size={20} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                        🚨 CRITICAL DRUG-DRUG INTERACTION ALERT ({drugInteractions.length} Detected)
+                      </h4>
+                      <p className="text-[11px] text-red-100 font-medium">
+                        Contraindicated combination prescribed. Review clinical risks below before finalizing prescription.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 bg-red-950/60 text-amber-300 text-[10px] font-black uppercase tracking-widest rounded-full border border-red-400/40">
+                    Clinical Hazard
+                  </span>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  {drugInteractions.map((inter, iIdx) => (
+                    <div key={iIdx} className="bg-black/25 backdrop-blur-xs p-3 rounded-xl border border-white/15 text-xs space-y-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-black text-amber-200 text-xs">
+                          ⚠️ {inter.drugA} + {inter.drugB}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-red-500/80 text-white font-mono font-bold text-[10px]">
+                          {inter.severity || inter.level} SEVERITY
+                        </span>
+                      </div>
+                      <p className="font-bold text-white text-[12px]">{inter.title}</p>
+                      <p className="text-red-100 text-[11px] leading-relaxed">{inter.mechanism}</p>
+                      <div className="bg-white/10 p-2 rounded-lg text-emerald-100 font-semibold text-[11px] mt-1">
+                        <strong className="text-amber-200">Clinical Action: </strong> {inter.recommendation}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Individual Medicine Cards */}
             <div className="space-y-4">
               {medicines.map((med, idx) => {
                 // If allergy conflict: RED THE BLOCK
                 const isConflict = med.hasAllergyConflict;
+                const isNonVeg = isNonVegMedicine(med.name);
+                const medInteraction = drugInteractions.find(
+                  (inter) =>
+                    (inter.drugA && med.name && (inter.drugA.toLowerCase().includes(med.name.toLowerCase().trim()) || med.name.toLowerCase().includes(inter.drugA.toLowerCase().trim()))) ||
+                    (inter.drugB && med.name && (inter.drugB.toLowerCase().includes(med.name.toLowerCase().trim()) || med.name.toLowerCase().includes(inter.drugB.toLowerCase().trim())))
+                );
 
                 return (
                   <div
                     key={med.id || idx}
                     className={`rounded-2xl p-5 transition-all duration-200 border-2 ${
-                      isConflict
+                      isConflict || medInteraction
                         ? "bg-red-50/90 border-red-500 shadow-md ring-2 ring-red-200/60"
                         : med.activeCompounds?.length > 0
                         ? "bg-white border-teal-200 hover:border-teal-400 shadow-sm"
                         : "bg-white border-gray-200 hover:border-gray-300 shadow-sm"
                     }`}
                   >
+                    {/* Drug Interaction Alert for this specific medicine */}
+                    {medInteraction && (
+                      <div className="mb-4 p-3 bg-red-700 text-white rounded-xl flex items-start gap-3 shadow-md animate-pulse">
+                        <AlertTriangle size={20} className="shrink-0 mt-0.5 text-amber-300" />
+                        <div className="flex-1 text-xs">
+                          <p className="font-black text-sm uppercase tracking-wide">
+                            🚨 DRUG INTERACTION: {medInteraction.drugA} + {medInteraction.drugB}
+                          </p>
+                          <p className="mt-1 font-bold text-amber-200 text-xs">
+                            {medInteraction.title}
+                          </p>
+                          <p className="mt-0.5 text-red-100">
+                            {medInteraction.mechanism}
+                          </p>
+                          <p className="mt-1 font-semibold text-emerald-200">
+                            Recommendation: {medInteraction.recommendation}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Allergy Alert Header if Conflict Detected */}
                     {isConflict && (
                       <div className="mb-4 p-3 bg-red-600 text-white rounded-xl flex items-start gap-3 shadow-md animate-pulse">
@@ -1234,9 +1416,15 @@ export default function PrescriptionModal({
                       {/* Medicine Name with Autocomplete */}
                       <div className="sm:col-span-4 relative">
                         <div className="flex items-center justify-between mb-1">
-                          <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            Medicine / Brand Name *
-                          </label>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                              Medicine / Brand Name *
+                            </label>
+                            {/* Non-Veg Icon over medicine title */}
+                            {isNonVeg && (
+                              <NonVegIcon name={med.name} size="sm" />
+                            )}
+                          </div>
 
                           {/* Small Generic Pop-up Trigger Directly Over Prescribed Medicine */}
                           {!isConflict && med.genericInfo?.available && (
@@ -1353,6 +1541,14 @@ export default function PrescriptionModal({
                           )}
                         </div>
 
+                        {/* Non-Veg Badge Indicator directly below input */}
+                        {isNonVeg && (
+                          <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-lg text-[11px] font-bold text-red-800 animate-in fade-in shadow-2xs">
+                            <NonVegIcon name={med.name} size="sm" showBadge={false} />
+                            <span>Non-Vegetarian Formulation (Contains Salmon / Fish Oil / Animal Extract)</span>
+                          </div>
+                        )}
+
                         {/* Autocomplete Dropdown from Formulary */}
                         {med.showSuggestions && med.searchSuggestions?.length > 0 && (
                           <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-30 max-h-56 overflow-y-auto divide-y divide-gray-100">
@@ -1367,7 +1563,12 @@ export default function PrescriptionModal({
                                 className="w-full text-left p-2.5 hover:bg-teal-50 transition-colors flex items-center justify-between gap-2"
                               >
                                 <div className="min-w-0">
-                                  <p className="text-xs font-bold text-gray-900 truncate">{sug.name}</p>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <p className="text-xs font-bold text-gray-900 truncate">{sug.name}</p>
+                                    {isNonVegMedicine(sug.name) && (
+                                      <NonVegIcon name={sug.name} size="sm" />
+                                    )}
+                                  </div>
                                   <p className="text-[10px] text-gray-500 truncate">
                                     {sug.short_composition1} · {sug.manufacturer_name}
                                   </p>

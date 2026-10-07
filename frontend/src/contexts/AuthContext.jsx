@@ -13,9 +13,21 @@ export function AuthProvider({ children }) {
     const storedUser = localStorage.getItem("medicore_user");
     if (storedToken && storedUser) {
       setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (_) {
+        setUser(null);
+      }
     }
     setIsLoading(false);
+
+    const handleAuthExpired = () => {
+      setToken(null);
+      setUser(null);
+    };
+
+    window.addEventListener("medicore:auth_expired", handleAuthExpired);
+    return () => window.removeEventListener("medicore:auth_expired", handleAuthExpired);
   }, []);
 
   const login = async (email, password) => {

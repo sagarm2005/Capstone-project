@@ -15,7 +15,9 @@ import {
   AlertCircle,
   Save,
   ShieldCheck,
-  Users
+  Users,
+  Send,
+  Bot
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -50,6 +52,7 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
   // Basic contact and doctor info
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
   const [primaryDoctorName, setPrimaryDoctorName] = useState("");
   const [primaryDoctorContact, setPrimaryDoctorContact] = useState("");
   const [bloodGroup, setBloodGroup] = useState("O+");
@@ -92,6 +95,7 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
       if (!data) return;
       setPhone(data.phone || "");
       setAddress(data.address || "");
+      setTelegramChatId(data.telegramChatId || "");
       setPrimaryDoctorName(data.primaryDoctorName || "");
       setPrimaryDoctorContact(data.primaryDoctorContact || "");
       setBloodGroup(data.bloodGroup || "O+");
@@ -190,6 +194,7 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
     const payload = {
       phone,
       address,
+      telegramChatId: (telegramChatId || "").trim(),
       primaryDoctorName,
       primaryDoctorContact,
       bloodGroup,
@@ -358,6 +363,22 @@ export default function PatientProfileModal({ isOpen, onClose, patientId, initia
                   placeholder="Apartment / House No, Street, Landmark, City, Postal Code"
                   className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all resize-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                  <Send size={13} className="text-[#0d6e7e]" /> Telegram Chat ID (for Bot Alerts & Doctor Updates)
+                </label>
+                <input
+                  type="text"
+                  value={telegramChatId}
+                  onChange={(e) => setTelegramChatId(e.target.value)}
+                  placeholder="e.g. 123456789 (Use @userinfobot on Telegram to find your Chat ID)"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-[#0d6e7e] outline-none transition-all font-mono"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Connect your Telegram account to receive instant hospital announcements, prescription updates, and appointment reminders directly on Telegram.
+                </p>
               </div>
 
               {/* Primary Doctor Contact Section */}

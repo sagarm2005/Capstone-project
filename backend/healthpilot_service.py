@@ -126,6 +126,51 @@ def check_allergy_against_compounds(patient_allergies, active_compounds, drug_na
         "alerts": alerts
     }
 
+def detect_dietary_origin(medicine_name, active_compounds=None):
+    """
+    Detects whether a prescribed medicine or nutraceutical supplement contains
+    animal-derived, marine, or non-vegetarian ingredients (e.g. MuscleBlaze Omega-3,
+    Tata 1mg Salmon tablets, fish oil, marine collagen, gelatin, etc.)
+    """
+    if not medicine_name:
+        return {"isNonVeg": False, "isVeg": True, "label": "Veg", "icon": "veg"}
+        
+    combined = (medicine_name + " " + " ".join(active_compounds or [])).lower()
+    
+    non_veg_keywords = [
+        "salmon", "omega-3", "omega 3", "fish oil", "cod liver", "shark liver", "krill oil",
+        "muscleblaze", "tata 1mg salmon", "tata 1 mg salmon", "marine collagen", "gelatin",
+        "shellfish", "chitin", "glucosamine", "squene", "pepsin", "liver extract"
+    ]
+    
+    for kw in non_veg_keywords:
+        if kw in combined:
+            origin_desc = (
+                "Salmon Fish Oil / Marine Omega-3" if "salmon" in combined
+                else "Marine Fish Oil (Omega-3 Fatty Acids)" if ("omega" in combined or "fish" in combined or "muscleblaze" in combined)
+                else "Marine Collagen / Shellfish Source" if ("collagen" in combined or "shellfish" in combined or "glucosamine" in combined)
+                else "Animal / Marine Derivative"
+            )
+            return {
+                "isNonVeg": True,
+                "isVeg": False,
+                "label": "Non-Veg",
+                "icon": "non-veg",
+                "matchedKeyword": kw,
+                "origin": origin_desc,
+                "badgeText": "Non-Vegetarian Formulation",
+                "alert": f"⚠️ Non-Vegetarian Formulation: Contains {origin_desc}. Check patient dietary and religious preferences."
+            }
+            
+    return {
+        "isNonVeg": False,
+        "isVeg": True,
+        "label": "Veg",
+        "icon": "veg",
+        "origin": "Vegetarian / Synthetic",
+        "badgeText": "Vegetarian Formulation"
+    }
+
 def analyze_prescribed_medicine(medicine_name, patient_allergies=None):
     """
     Complete analysis for a prescribed medicine:
@@ -133,6 +178,7 @@ def analyze_prescribed_medicine(medicine_name, patient_allergies=None):
     2. Allergy Check: Flags conflict and triggers RED status if allergy detected.
     3. Generic Check: If no allergy, identifies generic medicine and enables add-generic option.
     4. Indian Medicine Dataset: Looks up real price from indian_medicine_data.json.
+    5. Dietary Check: Identifies Non-Veg animal/marine supplements (Salmon, Omega-3, etc.).
     """
     clean_name = medicine_name.strip()
     if not clean_name:
@@ -193,10 +239,14 @@ def analyze_prescribed_medicine(medicine_name, patient_allergies=None):
     if generic_name:
         generic_price_info = get_medicine_price_details(generic_name)
 
+    # 4. Dietary Origin (Veg vs Non-Veg like MuscleBlaze Omega-3, Tata 1mg Salmon, etc.)
+    dietary_info = detect_dietary_origin(clean_name, active_compounds)
+
     return {
         "medicineName": clean_name,
         "brandName": brand_name,
         "activeCompounds": active_compounds,
+        "dietary": dietary_info,
         "allergyCheck": allergy_check,
         "hasAllergyConflict": allergy_check["hasConflict"],
         "generic": {

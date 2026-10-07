@@ -3,24 +3,25 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Calendar, FileText, FlaskConical, CreditCard,
-  Bell, MessageCircle, Users, Activity, Map, LogOut, Menu, User, ChevronRight, Syringe, Brain, Receipt
+  Bell, MessageCircle, Users, Activity, Map, LogOut, Menu, User, ChevronRight, Syringe, Brain, Receipt, ShieldAlert
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { icon: <LayoutDashboard size={18} />, label: "Dashboard", href: "/dashboard", roles: ["patient", "doctor", "lab", "admin", "superadmin", "blood_bank"] },
-  { icon: <Calendar size={18} />, label: "Appointments", href: "/appointments", roles: ["patient", "doctor", "admin"] },
+  { icon: <ShieldAlert size={18} />, label: "SafeBites", href: "/safebites", roles: ["patient", "doctor", "admin", "superadmin"] },
+  { icon: <Calendar size={18} />, label: "Appointments", href: "/appointments", roles: ["patient", "doctor", "admin", "superadmin"] },
   { icon: <Calendar size={18} />, label: "Manage Schedule", href: "/schedule", roles: ["doctor"] },
   { icon: <Activity size={18} />, label: "Blood Bank", href: "/blood-bank", roles: ["doctor", "blood_bank", "admin"] },
   { icon: <FileText size={18} />, label: "Prescriptions", href: "/prescriptions", roles: ["patient", "doctor"] },
   { icon: <FlaskConical size={18} />, label: "Lab Reports", href: "/lab", roles: ["patient", "doctor", "lab"] },
   { icon: <Brain size={18} />, label: "Models", href: "/models", roles: ["doctor"] },
-  { icon: <Syringe size={18} />, label: "Vaccinations", href: "/vaccinations", roles: ["patient", "doctor", "admin"] },
+  { icon: <Syringe size={18} />, label: "Vaccinations", href: "/vaccinations", roles: ["patient", "doctor", "admin", "superadmin"] },
   { icon: <CreditCard size={18} />, label: "Payments", href: "/payments", roles: ["patient", "admin"] },
-  { icon: <Receipt size={18} />, label: "Total Expense", href: "/expenses", roles: ["patient", "admin", "superadmin"] },
+  { icon: <Receipt size={18} />, label: "Total Expense", href: "/expenses", roles: ["patient"] },
   { icon: <Bell size={18} />, label: "Notifications", href: "/notifications", roles: ["patient", "doctor", "lab", "admin", "superadmin", "blood_bank"] },
   { icon: <MessageCircle size={18} />, label: "AI Chatbot", href: "/chatbot", roles: ["patient"] },
-  { icon: <Users size={18} />, label: "Patients", href: "/patients", roles: ["doctor", "admin"] },
+  { icon: <Users size={18} />, label: "Patients", href: "/patients", roles: ["doctor", "admin", "superadmin"] },
   { icon: <Activity size={18} />, label: "Disease Monitor", href: "/disease", roles: ["admin", "superadmin"] },
   { icon: <Map size={18} />, label: "Location Stats", href: "/locations", roles: ["superadmin"] },
 ];
